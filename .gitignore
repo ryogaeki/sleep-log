@@ -1,0 +1,14 @@
+node_modules/
+.next/
+out/
+dist/
+.env*
+!.env.example
+*.tsbuildinfo
+next-env.d.ts
+playwright-report/
+test-results/
+.DS_Store
+*.log
+backups/
+/sleep-log-*backup-*.json
