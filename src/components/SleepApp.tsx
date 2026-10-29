@@ -5,15 +5,16 @@ import { getSupabase, configured, signIn } from "../lib/supabase";
 import { CloudRepository, DEMO_USER, type Repository, dbError } from "../lib/repository";
 import { startDemo, DEMO_STORAGE } from "../lib/demo";
 import { readDraft, clearDraft, type Draft } from "../lib/draft";
-import { dayOf, shiftDay, monthStart, shiftMonth, dateLabel, timeOf, summary, duration, minutesOnDay, estimated, formatDuration, KIND_LABEL, INTENTION_LABEL, KINDS, type SleepEntry } from "../lib/sleep";
+import { dayOf, shiftDay, shiftMonth, dateLabel, timeOf, summary, duration, minutesOnDay, estimated, formatDuration, KIND_LABEL, INTENTION_LABEL, KINDS, type SleepEntry } from "../lib/sleep";
 import { Icon, type IconName } from "./Icon";
 import { Calendar } from "./Calendar";
 import { RecordForm } from "./RecordForm";
 import { DataPanel } from "./DataPanel";
+import { AnalysisPanel } from "./AnalysisPanel";
 
-type View="day"|"calendar"|"data";
+type View="day"|"calendar"|"analysis"|"data";
 type Access="loading"|"unconfigured"|"signedOut"|"forbidden"|"error"|"ready";
-const NAV:{view:View;label:string;icon:IconName}[]=[{view:"day",label:"日別の記録",icon:"moon"},{view:"calendar",label:"カレンダー",icon:"calendar"},{view:"data",label:"データ管理",icon:"settings"}];
+const NAV:{view:View;label:string;icon:IconName}[]=[{view:"day",label:"日別の記録",icon:"moon"},{view:"calendar",label:"カレンダー",icon:"calendar"},{view:"analysis",label:"分析",icon:"chart"},{view:"data",label:"データ管理",icon:"settings"}];
 
 export default function SleepApp() {
   const [access,setAccess]=useState<Access>("loading");
@@ -35,6 +36,9 @@ export default function SleepApp() {
   const demoRef=useRef(false);
   const currentUser=useRef<string|null>(null);
   const userId=demo?DEMO_USER:session?.user.id??"";
+  // 月境界をまたぐ週と、カレンダーの前後の日付も同じ取得範囲で扱う。
+  const windowFirst=selected?shiftMonth(selected,-1):"";
+  const windowUntil=selected?shiftMonth(selected,2):"";
   useEffect(()=>{setSelected(dayOf(new Date()));},[]);
   useEffect(()=>{
     let active=true;let check=0;
@@ -61,11 +65,11 @@ export default function SleepApp() {
   },[authRefresh]);
   const reload=useCallback(()=>setRefresh(n=>n+1),[]);
   useEffect(()=>{
-    if(!repository || !selected || access!=="ready")return;
+    if(!repository || !windowFirst || !windowUntil || access!=="ready")return;
     const ticket=++generation.current;setLoading(true);setError("");setEntries([]);
-    repository.list(monthStart(selected),shiftMonth(selected,1)).then(data=>{if(ticket===generation.current)setEntries(data);}).catch(e=>{if(ticket===generation.current)setError(e instanceof Error?e.message:"記録を読み込めませんでした。");}).finally(()=>{if(ticket===generation.current)setLoading(false);});
+    repository.list(windowFirst,windowUntil).then(data=>{if(ticket===generation.current)setEntries(data);}).catch(e=>{if(ticket===generation.current)setError(e instanceof Error?e.message:"記録を読み込めませんでした。");}).finally(()=>{if(ticket===generation.current)setLoading(false);});
     return()=>{generation.current++;};
-  },[repository,selected,refresh,access]);
+  },[repository,windowFirst,windowUntil,refresh,access]);
   useEffect(()=>{
     const onFocus=()=>{if(document.visibilityState==="visible")reload();};
     window.addEventListener("focus",onFocus);document.addEventListener("visibilitychange",onFocus);
@@ -108,7 +112,7 @@ export default function SleepApp() {
       {pendingDraft&&<div className="notice draft-notice"><Icon name="pencil"/><div>未保存の入力があります。<button type="button" className="text-button" onClick={()=>{setEditor({draft:pendingDraft});setPendingDraft(null);}}>入力を再開する</button><button type="button" className="text-button muted" onClick={()=>{if(window.confirm("未保存の入力を破棄しますか？")){clearDraft(userId);setPendingDraft(null);}}}>破棄</button></div></div>}
       {notice&&<div className="toast" role="status"><Icon name="check" size={18}/>{notice}</div>}
       {error&&<div className="notice error" role="alert"><Icon name="info"/><div>{error}<button type="button" className="text-button" onClick={reload}>もう一度読み込む</button></div></div>}
-      {view==="data"&&repository?<DataPanel repository={repository} demo={demo} onRestored={message=>{setNotice(message);reload();}} onLogout={logout}/>:view==="calendar"?<div className="calendar-page"><div className="section-heading"><div><p className="eyebrow">SLEEP CALENDAR</p><h1>カレンダー</h1><p>眠った時間を、日々の流れで。</p></div><button type="button" className="button primary" onClick={()=>openEditor()}><Icon name="plus"/>睡眠を追加</button></div><div className={`panel ${loading?"is-loading":""}`}><Calendar selected={selected} entries={entries} onSelect={d=>selectDate(d,true)} onMonth={setSelected}/></div><div className="calendar-legend">{KINDS.map(k=><span key={k}><i className={`dot ${k}`}/>{KIND_LABEL[k]}</span>)}<span>— 未記録</span></div><p className="calendar-help">日付を選ぶと、その日の記録を確認・編集できます。推定時刻を含む合計には「約」を表示します。</p></div>:<div className="daily-layout"><div className="daily-main"><div className="section-heading"><div><p className="eyebrow">MY SLEEP JOURNAL</p><h1>{selected===today?"今日の睡眠":`${Number(selected.slice(5,7))}月${Number(selected.slice(-2))}日の記録`}</h1><p>眠りのひとつひとつを、ありのままに。</p></div><button type="button" className="button primary add-top" onClick={()=>openEditor()}><Icon name="plus" size={18}/>睡眠を追加</button></div>
+      {view==="analysis"?<AnalysisPanel entries={entries} selected={selected} loading={loading} error={error} onSelect={selectDate} onEdit={openEditor}/>:view==="data"&&repository?<DataPanel repository={repository} demo={demo} onRestored={message=>{setNotice(message);reload();}} onLogout={logout}/>:view==="calendar"?<div className="calendar-page"><div className="section-heading"><div><p className="eyebrow">SLEEP CALENDAR</p><h1>カレンダー</h1><p>眠った時間を、日々の流れで。</p></div><button type="button" className="button primary" onClick={()=>openEditor()}><Icon name="plus"/>睡眠を追加</button></div><div className={`panel ${loading?"is-loading":""}`}><Calendar selected={selected} entries={entries} onSelect={d=>selectDate(d,true)} onMonth={setSelected}/></div><div className="calendar-legend">{KINDS.map(k=><span key={k}><i className={`dot ${k}`}/>{KIND_LABEL[k]}</span>)}<span>— 未記録</span></div><p className="calendar-help">日付を選ぶと、その日の記録を確認・編集できます。推定時刻を含む合計には「約」を表示します。</p></div>:<div className="daily-layout"><div className="daily-main"><div className="section-heading"><div><p className="eyebrow">MY SLEEP JOURNAL</p><h1>{selected===today?"今日の睡眠":`${Number(selected.slice(5,7))}月${Number(selected.slice(-2))}日の記録`}</h1><p>眠りのひとつひとつを、ありのままに。</p></div><button type="button" className="button primary add-top" onClick={()=>openEditor()}><Icon name="plus" size={18}/>睡眠を追加</button></div>
         <div className="date-toolbar"><div className="row gap-2"><button type="button" className="icon-button" aria-label="前の日" onClick={()=>selectDate(shiftDay(selected,-1))}><Icon name="left" size={18}/></button><button type="button" className="date-title" onClick={()=>setView("calendar")}><Icon name="calendar" size={17}/>{selected?dateLabel(selected,true):""}</button><button type="button" className="icon-button" aria-label="次の日" onClick={()=>selectDate(shiftDay(selected,1))}><Icon name="right" size={18}/></button></div>{selected!==today&&<button type="button" className="today-button" onClick={()=>selectDate(today)}>今日</button>}</div>
         <section className={`summary-card ${loading?"is-loading":""}`} aria-label="この日の記録合計"><div className="summary-top"><span><Icon name="moon" size={17}/>記録合計</span><span className="record-count">{loading?"読込中":`${totals.records.length}回の睡眠`}</span></div><div className="summary-total">{loading?<span className="total-empty">…</span>:error?<span className="total-empty">—</span>:totals.records.length?<>{totals.estimated&&<span className="approx">約</span>}<strong>{Math.floor(totals.minutes/60)}</strong><span>時間</span><strong>{totals.minutes%60}</strong><span>分</span></>:<span className="total-empty">—</span>}</div><p className="summary-caption">{error?"記録を取得できませんでした":totals.records.length?totals.estimated?"推定の時刻を含む、記録された睡眠の合計です。":"記録された睡眠の合計です。":"この日の睡眠は、まだ記録されていません。"}</p><div className="summary-divider"/><div className="kind-summary">{KINDS.slice(0,3).map(kind=><div key={kind}><span><i className={`dot ${kind}`}/>{KIND_LABEL[kind]}</span><strong>{totals.byKind[kind]?formatDuration(totals.byKind[kind]):"—"}</strong></div>)}</div><div className="summary-moon"><Icon name="moon" size={105}/></div></section>
         <section className="records-section"><div className="records-heading"><h2>睡眠の記録 <span>{totals.records.length}</span></h2><button type="button" className="text-button" onClick={reload} disabled={loading}><Icon name="refresh" size={15} className={loading?"spinning":""}/>更新</button></div>

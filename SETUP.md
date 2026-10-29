@@ -1,6 +1,8 @@
 # Sleep Log の起動とクラウド保存の設定
 
-アプリの実装は完了。実際のSupabaseプロジェクトはまだ作成していないため、本番のログイン・保存を使うには以下の設定が必要。
+公開URL：[https://ryogaeki.github.io/sleep-log/](https://ryogaeki.github.io/sleep-log/)
+
+この文書は初期設定・再設定の操作手順。各操作の目的も含めて見返す場合は [SETUP_NOTES.md](SETUP_NOTES.md) を参照。完了済みの初期SQLを再実行する必要はない。第2段階の分析機能も、既存のDB設定で動作する。
 
 ## 1. まず画面を動かす
 
@@ -39,7 +41,7 @@ Freeのまま利用する。有料アップグレードや有料追加機能は�
 
 ## 3. 保存する表とルールを用意する
 
-Supabaseの「SQL Editor」で新しいクエリーを開き、[DB定義ファイル](supabase/migrations/202610180001_sleep_log.sql) の内容をすべて貼り付けて実行する。
+Supabaseの「SQL Editor」で新しいクエリーを開き、名前を `01_setup_sleep_log` とし、[DB定義ファイル](supabase/migrations/202610180001_sleep_log.sql) の内容をすべて貼り付けて実行する。プロジェクトが休止中なら、先に「Resume project」で再開する。
 
 このファイルは次をまとめて作る。
 
@@ -69,6 +71,8 @@ https://＜プロジェクトID＞.supabase.co/auth/v1/callback
 
 GitHubが発行したClient IDとClient secretを、SupabaseのGitHubプロバイダー設定に入力して有効にする。Client secretはSupabase側だけに設定し、アプリのコード・公開用環境変数・GitHubのRepository variablesには入れない。
 
+「GitHubを有効化」はON、「Allow users without an email」は、今回の初期設定ではOFFにして保存する。
+
 Supabaseの「Authentication → URL Configuration」で、まず次を設定する。
 
 | 項目 | 値 |
@@ -80,7 +84,7 @@ Supabaseの「Authentication → URL Configuration」で、まず次を設定す
 
 ## 5. アプリに接続情報を設定する
 
-Supabaseの「Project Settings → API」またはConnectの案内から、Project URLと公開用のPublishable keyを確認する。従来の `anon public` キーも使える。
+Supabaseの「Connect → Framework → Next.js → App Router」で、ShadcnはOFFのまま下にスクロールし、Project URLと公開用のPublishable keyを確認する。キーを個別に確認する場合は「Settings → API Keys」を使う。従来の `anon public` キーも使えるが、新しく設定する場合はPublishable keyを使う。
 
 `.env.example` を `.env.local` にコピーし、次の2行を埋める。
 
@@ -100,7 +104,7 @@ DBパスワード、Client secret、`secret` / `service_role` キーは、この
 
 1. Supabaseの「Authentication → Users」で、いまログインした本人のユーザーを見つける。
 2. そのユーザーのUUIDをコピーする。
-3. SQL Editorで次を実行する。文字列の中を本人のUUIDに置き換える。
+3. SQL Editorで `02_allow_my_account` というクエリーを作り、次を実行する。文字列の中を本人のUUIDに置き換える。
 
 ```sql
 insert into public.app_members (user_id)
@@ -130,10 +134,10 @@ GitHubリポジトリの次の場所を設定する。
 
 コードをmainブランチへpushすると、[公開用ワークフロー](.github/workflows/deploy-pages.yml) が型検査・ロジックとDBのテスト・PCとスマホ幅の操作テストを行い、接続情報を使ってビルドして公開する。公開用の変数がない場合は公開前に止まる。
 
-想定するURL：
+このプロジェクトの公開URL：
 
 ```text
-https://＜GitHubユーザー名＞.github.io/sleep-log/
+https://ryogaeki.github.io/sleep-log/
 ```
 
 このURLをSupabaseのSite URLとRedirect URLsに設定する。GitHub OAuth AppのHomepage URLも公開URLへ変更する。OAuth AppのCallback URLは引き続きSupabaseのURLを使う。
