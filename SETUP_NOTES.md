@@ -1,6 +1,6 @@
 # Sleep Log：設定・公開の見返しノート
 
-更新日：2026-10-29
+更新日：2026-10-31
 
 - アプリ：**[https://ryogaeki.github.io/sleep-log/](https://ryogaeki.github.io/sleep-log/)**
 - コードの保管先：[ryogaeki/sleep-log](https://github.com/ryogaeki/sleep-log)
@@ -255,6 +255,24 @@ git push
 | remote origin already exists | 保存先は既に登録されている。`git remote -v` で確認する |
 | GitHub Pagesの更新が見えない | Actionsの最新処理と公開先を確認し、完了後にブラウザを再読み込みする |
 
+## 15. iPhoneのホーム画面に同じアイコンで追加する
+
+**操作**：公開版の更新完了後、iPhoneのSafariで [Sleep Log](https://ryogaeki.github.io/sleep-log/) を開く。「共有 → ホーム画面に追加」を選び、「Webアプリとして開く」が表示されればONにして追加する。
+
+**要約**：ブラウザと同じ「薄紫の背景＋月と星」のアイコンで、ホーム画面から起動できるようにした。
+
+**軽い解説**：ブラウザ用の `public/icon.svg` から、iPhone向けの180×180ピクセルのPNG画像 `public/apple-touch-icon.png` を作っている。背景は不透明な薄紫にしてあり、角の形はiOS側で整えられる。`src/app/layout.tsx` で `apple-touch-icon` を指定し、GitHub Pagesの `/sleep-log/` 配下からも画像を読み込めるようにする。
+
+**確認**：「ホーム画面に追加」のプレビューに、月と星のアイコンが出る。既に置いたアイコンの見た目が古い場合は、入力中の記録を保存してから、古いホーム画面アイコンを削除してSafariから追加し直す。再ログインが必要な場合は同じGitHubアカウントを使う。
+
+元のSVGを変更したときは、PNGも再生成する。開発環境に `rsvg-convert` がある場合のコマンド：
+
+```bash
+rsvg-convert --width=180 --height=180 --background-color='#eeecfb' --output=public/apple-touch-icon.png public/icon.svg
+```
+
+これはホーム画面用アイコンの設定。オフラインでの保存・同期は別の機能として扱う。
+
 ## 参考にした公式の説明
 
 - [Supabase：GitHubログイン](https://supabase.com/docs/guides/auth/social-sign-in/auth-github)
@@ -262,3 +280,4 @@ git push
 - [Supabase：公開用キーと秘密キー](https://supabase.com/docs/guides/getting-started/api-keys)
 - [Supabase：無料プロジェクトの休止](https://supabase.com/docs/guides/platform/free-project-pausing)
 - [GitHub：Pagesのワークフロー](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages)
+- [Apple：ホーム画面用のアイコン設定](https://developer.apple.com/library/archive/documentation/AppleApplications/Reference/SafariWebContent/ConfiguringWebApplications/ConfiguringWebApplications.html)
