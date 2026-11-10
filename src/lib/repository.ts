@@ -5,6 +5,7 @@ import { AppError, fromJst, validateEntry, validateInput, sameContent, inputOnly
 export interface RestoreResult { added: number; kept: number; changed: number }
 export interface Repository {
   list(first: string, until: string): Promise<SleepEntry[]>;
+  all(): Promise<SleepEntry[]>;
   get(id: string): Promise<SleepEntry | null>;
   save(entry: SleepInput, expectedRevision?: number): Promise<SleepEntry>;
   remove(id: string, revision: number): Promise<void>;
@@ -20,6 +21,11 @@ export function dbError(error: { code?: string; message?: string }): AppError {
 }
 export class CloudRepository implements Repository {
   constructor(private sb: SupabaseClient, private userId: string) {}
+  async all() {
+    // 同じRLSを適用する既存のスナップショットRPCで、1000件超も欠けずに読む。
+    const backup = await this.export();
+    return backup.entries.map(entry => validateEntry({ ...entry, user_id: this.userId }));
+  }
   async list(first: string, until: string) {
     const entries: SleepEntry[] = [];
     for (let offset = 0; ; offset += 500) {
@@ -82,6 +88,7 @@ export class DemoRepository implements Repository {
   private entries: SleepEntry[];
   constructor(initial: SleepEntry[], private persist: (entries: SleepEntry[]) => void = () => {}) { this.entries = structuredClone(initial); }
   private commit(next: SleepEntry[]) { this.persist(next); this.entries = next; }
+  async all() { return structuredClone(this.entries); }
   async list(first: string, until: string) { return structuredClone(this.entries.filter(e => e.start_at < fromJst(until) && e.end_at > fromJst(first))); }
   async get(id: string) { return structuredClone(this.entries.find(e => e.id === id) ?? null); }
   async save(raw: SleepInput, revision?: number) {

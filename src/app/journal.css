@@ -1,0 +1,123 @@
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-left: auto;
+}
+.mobile-menu { display: none; position: relative; }
+.mobile-menu > summary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  color: #706384;
+  border: 1px solid #e9e3ef;
+  border-radius: 10px;
+  background: white;
+  cursor: pointer;
+  list-style: none;
+}
+.mobile-menu > summary::-webkit-details-marker { display: none; }
+.mobile-menu[open] > summary { background: #f0ebfa; color: #68509e; }
+.header-menu-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 9px);
+  z-index: 80;
+  min-width: 190px;
+  padding: 6px;
+  border: 1px solid #e8e0f0;
+  border-radius: 12px;
+  background: white;
+  box-shadow: 0 12px 35px #38224e1c;
+}
+.header-menu-panel button {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  min-height: 46px;
+  padding: 11px 12px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  text-align: left;
+  font-size: 13px;
+  color: #665275;
+  white-space: nowrap;
+}
+.header-menu-panel button:hover { background: #f5f0fa; }
+.notes-page { max-width: 920px; margin: 0 auto; min-width: 0; }
+.notes-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 22px;
+}
+.notes-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  padding: 0 14px;
+  min-height: 48px;
+  border: 1px solid #e4ddeb;
+  border-radius: 10px;
+  background: white;
+  color: #8c7c9b;
+}
+.notes-search:focus-within { outline: 2px solid #a49ceb; outline-offset: 1px; }
+.notes-search input {
+  width: 100%;
+  min-width: 0;
+  min-height: 46px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-size: 15px;
+  color: #554461;
+}
+.notes-search input:focus { outline: 0; }
+.notes-search input::placeholder { font-size: 12px; color: #8b7a97; }
+.notes-count { white-space: nowrap; color: #7c6c87; font-size: 12px; }
+.notes-list { display: grid; gap: 17px; }
+.note-card { padding: 23px 25px; min-width: 0; }
+.note-card > header { display: flex; align-items: flex-start; gap: 15px; justify-content: space-between; }
+.note-card h2 { font-size: 15px; color: #625070; font-weight: 600; }
+.note-card .icon-button { width: 44px; height: 44px; margin: -7px -9px 0 0; flex-shrink: 0; }
+.note-sleep { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin-top: 6px; color: #82718f; font-size: 11px; }
+.note-sleep > span { font-variant-numeric: tabular-nums; }
+.note-body { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; color: #554662; line-height: 1.95; margin-top: 18px; }
+.notes-more { display: flex; margin: 24px auto 0; }
+.notes-empty { padding: 45px 24px; text-align: center; color: #81708e; font-size: 12px; }
+.notes-empty > svg { margin-bottom: 14px; color: #9781b3; }
+.notes-empty h2 { font-size: 15px; margin-bottom: 9px; color: #70607f; }
+.analysis-period { flex: 1; max-width: 420px; min-width: 0; }
+.analysis-period button { flex: 1; min-width: 0; padding-left: 14px; padding-right: 14px; }
+.analysis-controls > .today-button { margin-left: auto; }
+.analysis-display-range { text-align: center; color: #776782; font-size: 12px; margin: -10px 0 23px; }
+.daily-bar-date, .time-chart-dates > span { white-space: nowrap; }
+.timeline-date.with-year { flex-direction: column; align-items: flex-start; gap: 0; line-height: 1.4; }
+.timeline-date.with-year > small { font-size: 8px; }
+.timeline-date.with-year > span { display: flex; gap: 4px; align-items: center; }
+@media (max-width: 760px) {
+  .mobile-menu { display: block; }
+  .header-actions { gap: 10px; }
+  .header-actions .account { gap: 7px; }
+  .header-actions .timezone { padding-right: 0; }
+  .notes-toolbar { gap: 11px; margin-bottom: 17px; }
+  .notes-search { padding: 0 10px; gap: 7px; }
+  .notes-search input { font-size: 16px; }
+  .notes-search input::placeholder { font-size: 10px; }
+  .note-card { padding: 20px 19px; }
+  .note-card h2 { font-size: 14px; }
+  .note-sleep { font-size: 10px; gap: 5px; }
+  .note-body { font-size: 13px; margin-top: 15px; }
+  .notes-list { gap: 14px; }
+  .analysis-controls { flex-wrap: nowrap; gap: 8px; }
+  .analysis-period button { padding: 8px 7px; font-size: 11px; white-space: nowrap; }
+  .analysis-controls > .today-button { flex-shrink: 0; font-size: 11px; padding: 7px 9px; }
+  .analysis-display-range { font-size: 10px; line-height: 1.9; margin-bottom: 17px; }
+}

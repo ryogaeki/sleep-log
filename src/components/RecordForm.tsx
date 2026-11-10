@@ -7,6 +7,7 @@ import { Icon } from "./Icon";
 
 export function RecordForm({ day, userId, entry, draft, repository, onClose, onSaved }: { day: string; userId:string; entry?:SleepEntry; draft?:Draft; repository:Repository; onClose:()=>void; onSaved:(message:string)=>void }) {
   const [values,setValues] = useState<FormValues>(()=>draft?.values ?? initialForm(day,entry));
+  const [noteOpen,setNoteOpen] = useState(Boolean(values.note));
   const [dirty,setDirty] = useState(Boolean(draft));
   const [error,setError] = useState("");
   const [errorCode,setErrorCode] = useState("");
@@ -56,7 +57,7 @@ export function RecordForm({ day, userId, entry, draft, repository, onClose, onS
     const missing:Record<string,string>={};
     if (!values.kind) missing.kind="睡眠の種類を選んでください。";
     for(const [key,label] of [["startDate","開始日"],["startTime","開始時刻"],["endDate","終了日"],["endTime","終了時刻"]]) if(!values[key as keyof FormValues]) missing[key]=`${label}を入力してください。`;
-    if([...values.note].length>2000) missing.note="メモは2,000文字以内にしてください。";
+    if([...values.note].length>2000) missing.note="ノートは2,000文字以内にしてください。";
     setFieldErrors(missing); setError(""); setErrorCode("");
     if(Object.keys(missing).length){ dialog.current?.querySelector<HTMLElement>("[aria-invalid=true]")?.focus(); return; }
     lock.current=true;setBusy(true);
@@ -88,8 +89,8 @@ export function RecordForm({ day, userId, entry, draft, repository, onClose, onS
   }
   return <dialog ref={dialog} className="record-dialog" aria-labelledby="record-title" onCancel={e=>{e.preventDefault();close();}}>
     <form onSubmit={save} noValidate>
-      <header className="dialog-heading"><div><p className="eyebrow">SLEEP RECORD</p><h2 id="record-title">{values.revision?"睡眠を編集":"睡眠を追加"}</h2></div><button type="button" className="icon-button" onClick={close} disabled={busy} aria-label="閉じる"><Icon name="close"/></button></header>
-      <div className="dialog-content"><p className="form-intro">夜の睡眠も、昼寝も、寝落ちも。<br/>思い出したときに、そのまま記録できます。</p>
+      <header className="dialog-heading"><div><h2 id="record-title">{values.revision?"睡眠を編集":"睡眠を追加"}</h2></div><button type="button" className="icon-button" onClick={close} disabled={busy} aria-label="閉じる"><Icon name="close"/></button></header>
+      <div className="dialog-content">
       <fieldset disabled={busy} className="form-fields">
         <div className="field-block"><label id="kind-label">睡眠の種類 <span className="required">必須</span></label><div className="kind-options" role="group" aria-labelledby="kind-label">{KINDS.map(kind=><button key={kind} type="button" aria-pressed={values.kind===kind} aria-invalid={Boolean(fieldErrors.kind)} className={`kind-option ${kind} ${values.kind===kind?"active":""}`} onClick={()=>update({kind,...(!values.intentionTouched?{intention:DEFAULT_INTENTION[kind]}:{})})}><Icon name={kind==="normal"?"moon":kind==="nap"?"sun":kind==="doze"?"spark":"clock"}/>{KIND_LABEL[kind]}</button>)}</div>{fieldErrors.kind&&<p className="field-error">{fieldErrors.kind}</p>}</div>
         {(["start","end"] as const).map(side=>{
@@ -97,7 +98,7 @@ export function RecordForm({ day, userId, entry, draft, repository, onClose, onS
           return <div className="time-block" key={side}><div className="field-heading"><label htmlFor={`${side}-date`}>{isStart?"眠り始めた日時":"起きた日時"} <span className="required">必須</span></label><button type="button" className="text-button" onClick={()=>{try{update({[dk]:shiftDay(values[dk],isStart?-1:1)});}catch{setError("日付を選択してください。");}}}>{isStart?"前日にする":"翌日にする"}</button></div><div className="datetime-row"><div><input id={`${side}-date`} type="date" value={values[dk]} onChange={e=>update({[dk]:e.target.value})} aria-label={isStart?"開始日":"終了日"} aria-invalid={Boolean(fieldErrors[dk])}/>{fieldErrors[dk]&&<p className="field-error">{fieldErrors[dk]}</p>}</div><div><input id={`${side}-time`} type="time" step="60" value={values[tk]} onChange={e=>update({[tk]:e.target.value})} aria-label={isStart?"開始時刻":"終了時刻"} aria-invalid={Boolean(fieldErrors[tk])}/>{fieldErrors[tk]&&<p className="field-error">{fieldErrors[tk]}</p>}</div></div><div className="time-tools"><label className="checkbox-label"><input type="checkbox" checked={values[ek]} onChange={e=>update({[ek]:e.target.checked})}/><span>時刻は推定</span></label>{!isStart&&<button type="button" className="now-button" onClick={()=>{const now=new Date();update({endDate:dayOf(now),endTime:timeOf(now),endEstimated:false});}}><Icon name="clock" size={15}/>終了を今にする</button>}</div></div>;
         })}
         <div className="field-block"><label id="intention-label">眠った意図</label><div className="segmented" role="group" aria-labelledby="intention-label">{INTENTIONS.map(intention=><button key={intention} type="button" aria-pressed={values.intention===intention} className={values.intention===intention?"active":""} onClick={()=>update({intention,intentionTouched:true})}>{INTENTION_LABEL[intention]}</button>)}</div></div>
-        <details className="note-field" open={values.note?true:undefined}><summary>メモ <span>任意</span><Icon name="plus" size={17}/></summary><textarea aria-label="メモ" rows={3} value={values.note} onChange={e=>update({note:e.target.value})} placeholder="眠っていた場所や、起きたときの様子など" aria-invalid={Boolean(fieldErrors.note)}/><div className="character-count">{[...values.note].length.toLocaleString()} / 2,000文字</div>{fieldErrors.note&&<p className="field-error">{fieldErrors.note}</p>}</details>
+        <details className="note-field" open={noteOpen} onToggle={event=>setNoteOpen(event.currentTarget.open)}><summary>ノート <span>任意</span><Icon name="plus" size={17}/></summary><textarea aria-label="ノート" rows={3} value={values.note} onChange={e=>update({note:e.target.value})} placeholder="場所、起床時の状態、その日の出来事など" aria-invalid={Boolean(fieldErrors.note)}/><div className="character-count">{[...values.note].length.toLocaleString()} / 2,000文字</div>{fieldErrors.note&&<p className="field-error">{fieldErrors.note}</p>}</details>
       </fieldset>
       {preview&&<div className="duration-preview"><div><span>記録する睡眠時間</span><strong>{estimated(preview)?"約":""}{formatDuration(duration(preview))}</strong></div><p>{allocations.map(a=>`${dateLabel(a.day)}に${formatDuration(a.minutes)}`).join("、")}{moreDays>0?`、ほか${moreDays}日`:""}{estimated(preview)?"（推定を含む）":""}</p></div>}
       {error&&<div className="notice error" role="alert"><Icon name="info"/><div>{error}<small>入力はこの画面に残っています。</small>{errorCode==="conflict"&&<button type="button" className="text-button" disabled={busy} onClick={getLatest}>最新の記録を確認</button>}</div></div>}

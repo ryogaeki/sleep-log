@@ -99,8 +99,8 @@ export function validateInput(raw: unknown, now = Date.now()): SleepInput {
   if (!INTENTIONS.includes(x.intention as Intention)) throw new AppError("invalid", "眠った意図を選んでください。");
   if (!ACCURACIES.includes(x.start_accuracy as Accuracy) || !ACCURACIES.includes(x.end_accuracy as Accuracy)) throw new AppError("invalid", "時刻の精度を確認してください。");
   if (x.record_timezone !== "Asia/Tokyo") throw new AppError("invalid", "初期版は日本時間の記録に対応しています。");
-  if (x.note !== null && typeof x.note !== "string") throw new AppError("invalid", "メモはテキストで入力してください。");
-  if (typeof x.note === "string" && [...x.note].length > 2000) throw new AppError("invalid", "メモは2,000文字以内にしてください。");
+  if (x.note !== null && typeof x.note !== "string") throw new AppError("invalid", "ノートはテキストで入力してください。");
+  if (typeof x.note === "string" && [...x.note].length > 2000) throw new AppError("invalid", "ノートは2,000文字以内にしてください。");
   return inputOnly({ ...x, note: x.note === "" ? null : x.note } as unknown as SleepInput);
 }
 export function validateEntry(raw: unknown): SleepEntry {

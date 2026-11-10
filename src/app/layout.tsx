@@ -1,10 +1,11 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import "./analysis.css";
+import "./journal.css";
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 export const metadata: Metadata = {
-  title: "Sleep Log — わたしの睡眠記録",
-  description: "夜の睡眠も、昼寝も、寝落ちも。いつでも何回でも、あなたのペースで残せる睡眠記録。",
+  title: "Sleep Log — 睡眠記録",
+  description: "睡眠の日時・種類・ノートの記録と、睡眠時間の集計・分析。",
   icons: {
     icon: `${basePath}/icon.svg`,
     apple: [{ url: `${basePath}/apple-touch-icon.png`, sizes: "180x180", type: "image/png" }],

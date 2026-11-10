@@ -1,7 +1,7 @@
-import { DAY, MINUTE, KINDS, dayOf, estimated, fromJst, monthStart, shiftDay, shiftMonth, summary, timeOf, type Kind, type SleepEntry } from "./sleep";
+import { DAY, MINUTE, KINDS, dayOf, estimated, fromJst, minutesOnDay, monthStart, shiftDay, shiftMonth, timeOf, type Kind, type SleepEntry } from "./sleep";
 
-export type Period = "week" | "month";
-export interface PeriodRange { first: string; until: string; days: string[] }
+export type Period = "week" | "month" | "year" | "all";
+export interface PeriodRange { first: string; until: string; days: string[]; trimmed?: boolean }
 export interface TimelineSegment {
   entry: SleepEntry;
   start: number;
@@ -17,12 +17,31 @@ export interface TimePoint {
   estimated: boolean;
 }
 
-export function periodRange(selected: string, period: Period): PeriodRange {
+export function daysBetween(first: string, until: string): string[] {
+  const start = Date.parse(fromJst(first));
+  const count = Math.max(0, Math.round((Date.parse(fromJst(until)) - start) / DAY));
+  return Array.from({ length: count }, (_, i) => dayOf(start + i * DAY));
+}
+
+export function periodRange(selected: string, period: Period, entries: SleepEntry[] = []): PeriodRange {
   const weekday = new Date(fromJst(selected, "12:00")).getUTCDay();
-  const first = period === "month" ? monthStart(selected) : shiftDay(selected, -((weekday + 6) % 7));
-  const until = period === "month" ? shiftMonth(first, 1) : shiftDay(first, 7);
-  const count = Math.round((Date.parse(fromJst(until)) - Date.parse(fromJst(first))) / DAY);
-  return { first, until, days: Array.from({ length: count }, (_, i) => shiftDay(first, i)) };
+  let first = period === "week" ? shiftDay(selected, -((weekday + 6) % 7)) : period === "month" ? monthStart(selected) : `${selected.slice(0, 4)}-01-01`;
+  let until = period === "week" ? shiftDay(first, 7) : period === "month" ? shiftMonth(first, 1) : shiftMonth(first, 12);
+  if (period === "all") {
+    if (!entries.length) return { first: selected, until: selected, days: [], trimmed: true };
+    first = dayOf(entries.reduce((min, entry) => Math.min(min, Date.parse(entry.start_at)), Infinity));
+    // 全期間には、最後の記録の起床時刻も実際の日付で含める。
+    until = shiftDay(dayOf(entries.reduce((max, entry) => Math.max(max, Date.parse(entry.end_at)), -Infinity)), 1);
+  }
+  if (period === "year" || period === "all") {
+    const start = Date.parse(fromJst(first)), end = Date.parse(fromJst(until));
+    const records = entries.filter(entry => Date.parse(entry.start_at) < end && Date.parse(entry.end_at) > start);
+    if (!records.length) return { first, until, days: [], trimmed: true };
+    const firstDay = dayOf(records.reduce((min, entry) => Math.min(min, Math.max(start, Date.parse(entry.start_at))), Infinity));
+    const lastDay = dayOf(records.reduce((max, entry) => Math.max(max, Math.min(end, Date.parse(entry.end_at)) - 1), -Infinity));
+    return { first, until, days: daysBetween(firstDay, shiftDay(lastDay, 1)), trimmed: true };
+  }
+  return { first, until, days: daysBetween(first, until) };
 }
 
 export function timelineSegments(entries: SleepEntry[], day: string): TimelineSegment[] {
@@ -51,7 +70,22 @@ export function timePoints(entries: SleepEntry[], range: PeriodRange, kind: Kind
 }
 
 export function analyze(entries: SleepEntry[], range: PeriodRange, today: string) {
-  const days = range.days.map(day => ({ day, ...summary(entries, day), future: day > today }));
+  const days = range.days.map(day => ({ day, records: [] as SleepEntry[], minutes: 0, estimated: false,
+    byKind: Object.fromEntries(KINDS.map(kind => [kind, 0])) as Record<Kind, number>, future: day > today }));
+  const byDay = new Map(days.map(day => [day.day, day]));
+  if (days.length) for (const entry of entries) {
+    const first = [dayOf(entry.start_at), days[0].day].sort().at(-1)!;
+    const last = [dayOf(Date.parse(entry.end_at) - 1), days[days.length - 1].day].sort()[0];
+    for (let day = first; day <= last; day = shiftDay(day, 1)) {
+      const totals = byDay.get(day);
+      if (!totals) continue;
+      const minutes = minutesOnDay(entry, day);
+      if (minutes <= 0) continue;
+      totals.records.push(entry); totals.minutes += minutes; totals.byKind[entry.kind] += minutes;
+      totals.estimated ||= estimated(entry);
+    }
+  }
+  for (const day of days) day.records.sort((a, b) => a.start_at.localeCompare(b.start_at));
   const recorded = days.filter(day => !day.future && day.records.length > 0);
   const byKind = Object.fromEntries(KINDS.map(kind => [kind, recorded.reduce((total, day) => total + day.byKind[kind], 0)])) as Record<Kind, number>;
   const minutes = KINDS.reduce((total, kind) => total + byKind[kind], 0);

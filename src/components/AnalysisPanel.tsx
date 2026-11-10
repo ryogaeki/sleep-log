@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { analyze, entryLabel, periodRange, timePoints, timelineSegments, type Period, type PeriodRange } from "../lib/analytics";
+import { analyze, daysBetween, entryLabel, periodRange, timePoints, timelineSegments, type Period, type PeriodRange } from "../lib/analytics";
 import { KINDS, KIND_LABEL, dateLabel, dayOf, formatDuration, shiftDay, shiftMonth, timeOf, type Kind, type SleepEntry } from "../lib/sleep";
 import { Icon } from "./Icon";
 
@@ -7,10 +7,12 @@ type Analysis = ReturnType<typeof analyze>;
 const compactDate = (day: string) => `${Number(day.slice(5, 7))}/${Number(day.slice(-2))}`;
 const color = (kind: Kind) => `var(--${kind})`;
 const percent = (value: number) => `${value.toFixed(1)}%`;
+const PERIOD_LABEL: Record<Period, string> = { week: "週間", month: "月間", year: "年間", all: "全期間" };
 
 function useChartScroll(selected: string, days: string[], enabled = true) {
   const ref = useRef<HTMLDivElement>(null);
-  const index = days.indexOf(selected);
+  const exact = days.indexOf(selected);
+  const index = exact >= 0 ? exact : !days.length ? -1 : selected < days[0] ? 0 : days.length - 1;
   const count = days.length;
   const first = days[0];
   useEffect(() => {
@@ -28,6 +30,8 @@ function KindLegend() {
 
 function DailyChart({ data, selected, onSelect }: { data: Analysis; selected: string; onSelect: (day: string) => void }) {
   const scroll = useChartScroll(selected, data.days.map(day => day.day));
+  const tick = data.days.length > 400 ? 30 : data.days.length > 31 ? 7 : 1;
+  const showYear = data.days[0]?.day.slice(0, 4) !== data.days.at(-1)?.day.slice(0, 4);
   const maximum = Math.max(480, Math.ceil(Math.max(...data.days.map(day => day.minutes)) / 240) * 240);
   const runs: string[][] = [];
   for (const [i, day] of data.days.entries()) {
@@ -44,14 +48,14 @@ function DailyChart({ data, selected, onSelect }: { data: Analysis; selected: st
         <div className="chart-y-axis" aria-hidden="true">{[1, 0.75, 0.5, 0.25, 0].map(n => <span key={n} style={{ top: `${(1 - n) * 100}%` }}>{maximum * n / 60}h</span>)}</div>
         <div className="daily-chart-content">
           <div className="daily-chart-grid" aria-hidden="true" />
-          <div className="daily-chart-bars">{data.days.map(day => <button type="button" className={`daily-chart-day ${day.future ? "future" : ""}`} key={day.day}
+          <div className="daily-chart-bars">{data.days.map((day, index) => <button type="button" className={`daily-chart-day ${day.future ? "future" : ""}`} key={day.day}
             aria-label={`${day.day} ${day.records.length ? `${day.estimated ? "約" : ""}${formatDuration(day.minutes)}` : day.future ? "これから" : "未記録"} 日別の記録を開く`}
             title={`${dateLabel(day.day)}：${day.records.length ? `${day.estimated ? "約" : ""}${formatDuration(day.minutes)}` : day.future ? "これから" : "未記録"}`}
             onClick={() => onSelect(day.day)}>
             <span className="daily-bar-area">{day.records.length ? <span className="daily-bar-stack" style={{ height: `${day.minutes / maximum * 100}%` }}>{KINDS.map(kind => day.byKind[kind] > 0 && <span key={kind} style={{ height: `${day.byKind[kind] / day.minutes * 100}%`, background: color(kind) }} />)}</span> : <span className="missing-bar">—</span>}</span>
-            <span className="daily-bar-date">{Number(day.day.slice(-2))}</span>
+            <span className="daily-bar-date">{index % tick === 0 ? data.days.length <= 31 ? Number(day.day.slice(-2)) : `${showYear ? `${day.day.slice(2, 4)}/` : ""}${compactDate(day.day)}` : ""}</span>
           </button>)}</div>
-          <svg className="daily-chart-line" viewBox="0 0 1000 200" preserveAspectRatio="none" aria-hidden="true">{runs.filter(run => run.length > 1).map((run, i) => <polyline key={i} points={run.join(" ")} fill="none" stroke="#585078" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />)}{data.days.map((day, i) => day.records.length > 0 && !day.future && <circle key={day.day} cx={(i + 0.5) / data.days.length * 1000} cy={200 - day.minutes / maximum * 200} r="2.6" fill="#585078" />)}</svg>
+          <svg className="daily-chart-line" viewBox="0 0 1000 200" preserveAspectRatio="none" aria-hidden="true">{runs.filter(run => run.length > 1).map((run, i) => <polyline key={i} points={run.join(" ")} fill="none" stroke="#585078" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />)}{data.days.map((day, i) => day.records.length > 0 && !day.future && <ellipse key={day.day} cx={(i + 0.5) / data.days.length * 1000} cy={200 - day.minutes / maximum * 200} rx={Math.min(2.6, 2600 / Math.max(1000, data.days.length * 23))} ry="2.6" fill="#585078" />)}</svg>
         </div>
       </div>
     </div>
@@ -60,16 +64,19 @@ function DailyChart({ data, selected, onSelect }: { data: Analysis; selected: st
   </section>;
 }
 
-function SleepTimeline({ entries, data, selected, onSelect, onEdit }: { entries: SleepEntry[]; data: Analysis; selected: string; onSelect: (day: string) => void; onEdit: (entry: SleepEntry) => void }) {
+function SleepTimeline({ data, selected, onSelect, onEdit }: { data: Analysis; selected: string; onSelect: (day: string) => void; onEdit: (entry: SleepEntry) => void }) {
   const [highlight, setHighlight] = useState<string | null>(null);
   const scroll = useRef<HTMLDivElement>(null);
   const selectedRow = useRef<HTMLDivElement>(null);
   const first = data.days[0]?.day;
+  const last = data.days.at(-1)?.day;
+  const scrollDay = first && selected < first ? first : last && selected > last ? last : selected;
+  const showYear = first?.slice(0, 4) !== last?.slice(0, 4);
   useEffect(() => {
     const viewport = scroll.current;
     const row = selectedRow.current;
     if (viewport && row) viewport.scrollTop += row.getBoundingClientRect().top - viewport.getBoundingClientRect().top - viewport.clientHeight / 2 + row.clientHeight / 2;
-  }, [selected, first]);
+  }, [selected, first, last]);
   return <section className="panel analysis-panel" aria-labelledby="timeline-title">
     <div className="analysis-panel-heading"><div><h2 id="timeline-title">24時間タイムライン</h2><p>帯を押すと編集できます。矢印は前日・翌日へのつながりです。</p></div><Icon name="clock" /></div>
     <KindLegend />
@@ -77,9 +84,9 @@ function SleepTimeline({ entries, data, selected, onSelect, onEdit }: { entries:
     <div ref={scroll} className="timeline-scroll" tabIndex={0} role="region" aria-label="24時間タイムライン。横と縦にスクロールできます">
       <div className="sleep-timeline">
         <div className="timeline-axis"><span>日付</span><div>{[0, 6, 12, 18, 24].map(hour => <span key={hour} style={{ left: `${hour / 24 * 100}%` }}>{hour}:00</span>)}</div><span>合計</span></div>
-        {data.days.map(day => <div ref={day.day === selected ? selectedRow : undefined} className={`timeline-row ${day.day === selected ? "selected" : ""} ${day.future ? "future" : ""}`} key={day.day}>
-          <button type="button" className="timeline-date" aria-label={`${day.day} 日別の記録を開く`} onClick={() => onSelect(day.day)}>{compactDate(day.day)}<small>{dateLabel(day.day).slice(-3)}</small></button>
-          <div className="timeline-track">{timelineSegments(entries, day.day).map(segment => <button type="button" key={segment.entry.id}
+        {data.days.map(day => <div ref={day.day === scrollDay ? selectedRow : undefined} className={`timeline-row ${day.day === selected ? "selected" : ""} ${day.future ? "future" : ""}`} key={day.day}>
+          <button type="button" className={`timeline-date ${showYear ? "with-year" : ""}`} aria-label={`${day.day} 日別の記録を開く`} onClick={() => onSelect(day.day)}>{showYear && <small>{day.day.slice(0, 4)}年</small>}<span>{compactDate(day.day)}<small>{dateLabel(day.day).slice(-3)}</small></span></button>
+          <div className="timeline-track">{timelineSegments(day.records, day.day).map(segment => <button type="button" key={segment.entry.id}
             className={`timeline-segment ${segment.continuesBefore ? "continues-before" : ""} ${segment.continuesAfter ? "continues-after" : ""} ${highlight === segment.entry.id ? "highlighted" : ""}`}
             style={{ left: `${segment.start / 1440 * 100}%`, width: `${(segment.end - segment.start) / 1440 * 100}%`, background: color(segment.entry.kind) }}
             aria-label={`${day.day} ${KIND_LABEL[segment.entry.kind]} ${entryLabel(segment.entry)} 編集`}
@@ -122,19 +129,23 @@ function DozeChart({ data }: { data: Analysis }) {
 function TimeTrends({ entries, range, selected, onEdit }: { entries: SleepEntry[]; range: PeriodRange; selected: string; onEdit: (entry: SleepEntry) => void }) {
   const [kind, setKind] = useState<Kind | "all">("all");
   const points = useMemo(() => timePoints(entries, range, kind), [entries, range, kind]);
-  const scroll = useChartScroll(selected, range.days, points.length > 0);
+  const plotDays = useMemo(() => range.trimmed && points.length ? daysBetween(points[0].day, shiftDay(points[points.length - 1].day, 1)) : range.days, [range, points]);
+  const dayIndex = new Map(plotDays.map((day, index) => [day, index]));
+  const tick = plotDays.length > 400 ? 30 : plotDays.length > 31 ? 7 : 1;
+  const showYear = plotDays[0]?.slice(0, 4) !== plotDays.at(-1)?.slice(0, 4);
+  const scroll = useChartScroll(selected, plotDays, points.length > 0);
   const rows = entries.filter(entry => (kind === "all" || entry.kind === kind) && (dayOf(entry.start_at) >= range.first && dayOf(entry.start_at) < range.until || dayOf(entry.end_at) >= range.first && dayOf(entry.end_at) < range.until)).sort((a, b) => a.start_at.localeCompare(b.start_at));
   return <section className="panel analysis-panel" aria-labelledby="time-trends-title">
     <div className="analysis-panel-heading"><div><h2 id="time-trends-title">睡眠開始・起床時刻の推移</h2><p>1日に何回あっても、すべての開始・起床を表示します。</p></div><label className="chart-filter">種類<select aria-label="時刻グラフの種類" value={kind} onChange={event => setKind(event.target.value as Kind | "all")}><option value="all">すべての睡眠</option>{KINDS.map(k => <option value={k} key={k}>{KIND_LABEL[k]}</option>)}</select></label></div>
     <div className="analysis-legend"><span><i className="time-symbol start" />睡眠開始</span><span><i className="time-symbol end" />起床</span><span>中が白い点：推定時刻</span></div>
     <p className="scroll-hint">横にスクロールして、ほかの日付も確認できます。</p>
-    {!points.length ? <div className="analysis-empty">この期間に該当する開始・起床の記録はありません。</div> : <div ref={scroll} className="chart-scroll" tabIndex={0} role="region" aria-label="睡眠開始・起床時刻グラフ。横にスクロールできます"><div className="time-chart" style={{ minWidth: Math.max(320, range.days.length * 23 + 40) }}>
+    {!points.length ? <div className="analysis-empty">この期間に該当する開始・起床の記録はありません。</div> : <div ref={scroll} className="chart-scroll" tabIndex={0} role="region" aria-label="睡眠開始・起床時刻グラフ。横にスクロールできます"><div className="time-chart" style={{ minWidth: Math.max(320, plotDays.length * 23 + 40) }}>
       <div className="chart-y-axis" aria-hidden="true">{[0, 6, 12, 18, 24].map(hour => <span key={hour} style={{ top: `${hour / 24 * 100}%` }}>{hour}:00</span>)}</div>
       <div className="time-chart-plot"><div className="daily-chart-grid" aria-hidden="true" />{points.map(point => <button type="button" key={`${point.entry.id}-${point.event}`} className={`time-point ${point.event} ${point.estimated ? "estimated" : ""}`}
-        style={{ left: `${(range.days.indexOf(point.day) + 0.5) / range.days.length * 100}%`, top: `${point.minute / 1440 * 100}%` }}
+        style={{ left: `${((dayIndex.get(point.day) ?? 0) + 0.5) / plotDays.length * 100}%`, top: `${point.minute / 1440 * 100}%` }}
         aria-label={`${point.day} ${point.event === "start" ? "睡眠開始" : "起床"} ${timeOf(point.event === "start" ? point.entry.start_at : point.entry.end_at)} ${KIND_LABEL[point.entry.kind]}${point.estimated ? " 推定" : ""} 編集`}
         title={`${compactDate(point.day)} ${point.event === "start" ? "開始" : "起床"} ${timeOf(point.event === "start" ? point.entry.start_at : point.entry.end_at)} ${KIND_LABEL[point.entry.kind]}${point.estimated ? "（推定）" : ""}`}
-        onClick={() => onEdit(point.entry)}><i /></button>)}<div className="time-chart-dates" aria-hidden="true">{range.days.map(day => <span key={day}>{Number(day.slice(-2))}</span>)}</div></div>
+        onClick={() => onEdit(point.entry)}><i /></button>)}<div className="time-chart-dates" aria-hidden="true">{plotDays.map((day, index) => <span key={day}>{index % tick === 0 ? plotDays.length <= 31 ? Number(day.slice(-2)) : `${showYear ? `${day.slice(2, 4)}/` : ""}${compactDate(day)}` : ""}</span>)}</div></div>
     </div></div>}
     <p className="analysis-caption">点を押すと記録を編集できます。開始・起床それぞれの実際の日付に表示し、未記録は補いません。</p>
     <details className="analysis-details"><summary>開始・起床の日時を一覧で見る</summary><div className="table-scroll"><table><caption className="visually-hidden">睡眠開始・起床の日時一覧</caption><thead><tr><th scope="col">種類</th><th scope="col">睡眠開始</th><th scope="col">起床</th><th scope="col">操作</th></tr></thead><tbody>{rows.map(entry => <tr key={entry.id}><th scope="row">{KIND_LABEL[entry.kind]}</th><td>{compactDate(dayOf(entry.start_at))} {timeOf(entry.start_at)}{entry.start_accuracy === "estimated" ? "（推定）" : ""}</td><td>{compactDate(dayOf(entry.end_at))} {timeOf(entry.end_at)}{entry.end_accuracy === "estimated" ? "（推定）" : ""}</td><td><button type="button" onClick={() => onEdit(entry)} aria-label={`${KIND_LABEL[entry.kind]} ${entryLabel(entry)} 編集`}>編集</button></td></tr>)}</tbody></table>{!rows.length && <p>該当する記録はありません。</p>}</div></details>
@@ -147,23 +158,25 @@ export function AnalysisPanel({ entries, selected, loading, error, onSelect, onE
 }) {
   const [period, setPeriod] = useState<Period>("week");
   const today = dayOf(new Date());
-  const range = useMemo(() => periodRange(selected || today, period), [selected, today, period]);
+  const range = useMemo(() => periodRange(selected || today, period, entries), [selected, today, period, entries]);
   const data = useMemo(() => analyze(entries, range, today), [entries, range, today]);
   const approximate = data.estimated ? "約" : "";
   const onDay = (day: string) => onSelect(day, true);
   const metricStyle = { "--metric-accent": "var(--doze)" } as CSSProperties;
-  function move(offset: number) { onSelect(period === "week" ? shiftDay(selected, offset * 7) : shiftMonth(selected, offset)); }
+  function move(offset: number) { onSelect(period === "week" ? shiftDay(selected, offset * 7) : shiftMonth(selected, offset * (period === "year" ? 12 : 1))); }
+  const heading = period === "year" ? `${selected.slice(0, 4)}年` : period === "all" ? "全期間" : `${dateLabel(range.first, true)} 〜 ${dateLabel(shiftDay(range.until, -1))}`;
   return <div className="analysis-page">
-    <div className="section-heading"><div><p className="eyebrow">YOUR SLEEP PATTERNS</p><h1>眠りの分析</h1><p>記録を並べて、眠りの流れを見つける。</p></div><button type="button" className="button primary" onClick={() => onEdit()}><Icon name="plus" size={18} />睡眠を追加</button></div>
-    <div className="analysis-controls"><div className="analysis-period" role="group" aria-label="分析する期間"><button type="button" aria-pressed={period === "week"} onClick={() => setPeriod("week")}>週間</button><button type="button" aria-pressed={period === "month"} onClick={() => setPeriod("month")}>月間</button></div><label className="analysis-date">基準日<input type="date" aria-label="分析の基準日" value={selected} onChange={event => { if (/^\d{4}-\d{2}-\d{2}$/.test(event.target.value) && !event.target.value.startsWith("0000")) onSelect(event.target.value); }} /></label><button type="button" className="today-button" onClick={() => onSelect(today)}>今日</button></div>
-    <div className="analysis-range"><button type="button" className="icon-button" aria-label="前の分析期間" onClick={() => move(-1)}><Icon name="left" /></button><span>{dateLabel(range.first, true)} 〜 {dateLabel(shiftDay(range.until, -1))}</span><button type="button" className="icon-button" aria-label="次の分析期間" onClick={() => move(1)}><Icon name="right" /></button></div>
+    <div className="section-heading"><div><h1>眠りの分析</h1></div><button type="button" className="button primary" onClick={() => onEdit()}><Icon name="plus" size={18} />睡眠を追加</button></div>
+    <div className="analysis-controls"><div className="analysis-period" role="group" aria-label="分析する期間">{(Object.keys(PERIOD_LABEL) as Period[]).map(value => <button type="button" key={value} aria-pressed={period === value} onClick={() => setPeriod(value)}>{PERIOD_LABEL[value]}</button>)}</div>{period !== "all" && <button type="button" className="today-button" onClick={() => onSelect(today)}>{period === "year" ? "今年" : period === "month" ? "今月" : "今週"}</button>}</div>
+    <div className="analysis-range">{period !== "all" && <button type="button" className="icon-button" aria-label="前の分析期間" onClick={() => move(-1)}><Icon name="left" /></button>}<span>{heading}</span>{period !== "all" && <button type="button" className="icon-button" aria-label="次の分析期間" onClick={() => move(1)}><Icon name="right" /></button>}</div>
+    {range.trimmed && !loading && !error && <p className="analysis-display-range">{range.days.length ? `表示範囲：${dateLabel(range.days[0], true)} 〜 ${dateLabel(range.days[range.days.length - 1], true)}` : "この期間の睡眠記録はありません。"}</p>}
     {loading ? <div className="panel analysis-empty" role="status">分析する記録を読み込んでいます…</div> : error ? <div className="panel analysis-empty">記録を取得できなかったため、集計を表示できません。上の「もう一度読み込む」から再試行してください。</div> : <>
-      <div className="analysis-metrics"><section className="analysis-metric primary-metric" aria-label="1日平均の睡眠時間"><span><Icon name="moon" size={17} />1日平均（記録日）</span><strong>{data.average === null ? "—" : `${approximate}${formatDuration(data.average)}`}</strong><small>{data.recordedDays ? `記録がある${data.recordedDays}日で計算` : "記録を追加すると表示されます"}</small></section><section className="analysis-metric" aria-label="期間の合計睡眠時間"><span><Icon name="clock" size={17} />期間の合計</span><strong>{data.recordedDays ? `${approximate}${formatDuration(data.minutes)}` : "—"}</strong><small>{period === "week" ? "月曜〜日曜" : "月の1日〜末日"}の記録</small></section><section className="analysis-metric" style={metricStyle} aria-label="昼寝と寝落ちの合計"><span><Icon name="sun" size={17} />昼寝＋寝落ち</span><strong>{data.recordedDays ? `${data.estimatedByKind.nap || data.estimatedByKind.doze ? "約" : ""}${formatDuration(data.napAndDoze)}` : "—"}</strong><small>この期間内に眠っていた時間</small></section><section className="analysis-metric" aria-label="記録日数"><span><Icon name="calendar" size={17} />記録のある日</span><strong>{data.recordedDays}<em>日</em></strong><small>経過{data.elapsedDays}日中・未記録{data.elapsedDays - data.recordedDays}日</small></section></div>
+      <div className="analysis-metrics"><section className="analysis-metric primary-metric" aria-label="1日平均の睡眠時間"><span><Icon name="moon" size={17} />1日平均（記録日）</span><strong>{data.average === null ? "—" : `${approximate}${formatDuration(data.average)}`}</strong><small>{data.recordedDays ? `記録がある${data.recordedDays}日で計算` : "記録を追加すると表示されます"}</small></section><section className="analysis-metric" aria-label="期間の合計睡眠時間"><span><Icon name="clock" size={17} />期間の合計</span><strong>{data.recordedDays ? `${approximate}${formatDuration(data.minutes)}` : "—"}</strong><small>{period === "week" ? "月曜〜日曜" : period === "month" ? "月の1日〜末日" : period === "year" ? `${selected.slice(0, 4)}年` : "全期間"}の記録</small></section><section className="analysis-metric" style={metricStyle} aria-label="昼寝と寝落ちの合計"><span><Icon name="sun" size={17} />昼寝＋寝落ち</span><strong>{data.recordedDays ? `${data.estimatedByKind.nap || data.estimatedByKind.doze ? "約" : ""}${formatDuration(data.napAndDoze)}` : "—"}</strong><small>この期間内に眠っていた時間</small></section><section className="analysis-metric" aria-label="記録日数"><span><Icon name="calendar" size={17} />記録のある日</span><strong>{data.recordedDays}<em>日</em></strong><small>{range.trimmed ? "表示範囲" : "経過"}{data.elapsedDays}日中・未記録{data.elapsedDays - data.recordedDays}日</small></section></div>
       <p className="analysis-method"><Icon name="info" size={15} />平均は記録がある日だけで計算し、未記録を0時間として扱いません。記録済みの日も入力途中の可能性があります。{range.first <= today && range.until > today && "今日の分も途中経過です。"}推定を含む時間には「約」を表示します。</p>
-      <DailyChart data={data} selected={selected} onSelect={onDay} />
-      <SleepTimeline entries={entries} data={data} selected={selected} onSelect={onDay} onEdit={onEdit} />
+      {data.days.length ? <><DailyChart data={data} selected={selected} onSelect={onDay} />
+      <SleepTimeline data={data} selected={selected} onSelect={onDay} onEdit={onEdit} />
       <div className="analysis-two-column"><KindBreakdown data={data} /><DozeChart data={data} /></div>
-      <TimeTrends entries={entries} range={range} selected={selected} onEdit={onEdit} />
+      <TimeTrends entries={entries} range={range} selected={selected} onEdit={onEdit} /></> : <div className="panel analysis-empty">表示する記録がありません。</div>}
     </>}
   </div>;
 }
