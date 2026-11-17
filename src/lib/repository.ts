@@ -72,7 +72,10 @@ export class CloudRepository implements Repository {
     if (error) throw dbError(error);
     // 保存先の時計が端末より進んでいても、既存の記録のバックアップは可能。
     const checked = parseBackup(data, Infinity);
-    return { ...checked, entries: checked.entries.map((entry, index) => ({ ...(data as Backup).entries[index], ...entry })) };
+    return { ...checked, entries: checked.entries.map((entry, index) => {
+      const raw = (data as { entries: SleepEntry[] }).entries[index];
+      return { ...entry, created_at: raw.created_at, updated_at: raw.updated_at, revision: raw.revision };
+    }) };
   }
   async restore(backup: Backup) {
     const checked = parseBackup(backup);

@@ -7,10 +7,12 @@ const db=new PGlite({extensions:{btree_gist}});
 const owner="11111111-1111-4111-8111-111111111111";
 const other="22222222-2222-4222-8222-222222222222";
 const stranger="33333333-3333-4333-8333-333333333333";
+let beforeMigration: Record<string, unknown>;
+let afterMigration: Record<string, unknown>;
 const id=(n:number)=>`bbbbbbbb-bbbb-4bbb-8bbb-${String(n).padStart(12,"0")}`;
 async function asUser(user:string){await db.exec(`reset role; set role authenticated; select set_config('request.jwt.claim.sub','${user}',false);`);}
 async function reset(){await db.exec("reset role; truncate public.sleep_entries;");await asUser(owner);}
-async function insert(n:number,start="2025-01-01T02:00:00Z",end="2025-01-01T08:00:00Z",user=owner){return db.query("insert into public.sleep_entries(id,user_id,start_at,end_at,kind,intention,start_accuracy,end_accuracy,note) values($1,$2,$3,$4,'normal','intentional','estimated','exact',null) returning *",[id(n),user,start,end]);}
+async function insert(n:number,start="2025-01-01T02:00:00Z",end="2025-01-01T08:00:00Z",user=owner){return db.query("insert into public.sleep_entries(id,user_id,start_at,end_at,kind,note) values($1,$2,$3,$4,'normal',null) returning *",[id(n),user,start,end]);}
 before(async()=>{
   await db.exec(`create role anon; create role authenticated; create schema auth;
     create table auth.users(id uuid primary key);
@@ -19,8 +21,23 @@ before(async()=>{
     insert into auth.users values('${owner}'),('${other}'),('${stranger}');`);
   await db.exec(await readFile(new URL("../supabase/migrations/202610180001_sleep_log.sql",import.meta.url),"utf8"));
   await db.query("insert into public.app_members values($1),($2)",[owner,other]);
+  // 本番には触れず、旧SQLで作ったDBの実データを使って追加移行を検証する。
+  await db.query("insert into public.sleep_entries(id,user_id,start_at,end_at,kind,intention,start_accuracy,end_accuracy,note) values($1,$2,'2025-01-01T02:00Z','2025-01-01T08:00Z','doze','unknown','estimated','exact','以前のノート')",[id(99),owner]);
+  await db.exec("update public.sleep_entries set note=E'以前のノート\\n改行も保持'");
+  beforeMigration = (await db.query<Record<string,unknown>>("select * from public.sleep_entries")).rows[0];
+  const migration=await readFile(new URL("../supabase/migrations/202611170001_remove_sleep_flags.sql",import.meta.url),"utf8");
+  await db.exec(migration);
+  await db.exec(migration); // 誤って同じ更新SQLを再実行してもデータを失わない。
+  afterMigration = (await db.query<Record<string,unknown>>("select * from public.sleep_entries")).rows[0];
 });
 after(async()=>{await db.close();});
+test("旧DBの更新で廃止3列だけを削除し、記録・本文・更新番号・利用許可を保持する",async()=>{
+  const expected={...beforeMigration};
+  for(const key of ["intention","start_accuracy","end_accuracy"]){delete expected[key];assert.equal(key in afterMigration,false);}
+  assert.deepEqual(afterMigration,expected);
+  assert.equal(afterMigration.revision,2);
+  assert.equal((await db.query("select * from public.app_members")).rows.length,2);
+});
 test("本人だけのCRUDと、未許可・未ログイン・他人の所有者IDをDBで拒否",async()=>{
   await reset();await insert(1);
   await asUser(other);assert.equal((await db.query("select * from public.sleep_entries")).rows.length,0);
@@ -59,10 +76,10 @@ test("条件付き更新・削除で古い版の操作を拒み、DBが版を進
 });
 test("全件バックアップは1000件を超えても欠けず、所有者・認証情報を含まない",async()=>{
   await reset();
-  await db.query(`insert into public.sleep_entries(id,user_id,start_at,end_at,kind,intention,start_accuracy,end_accuracy)
+  await db.query(`insert into public.sleep_entries(id,user_id,start_at,end_at,kind)
     select ('cccccccc-cccc-4ccc-8ccc-'||lpad(n::text,12,'0'))::uuid,$1,
     '2020-01-01 00:00Z'::timestamptz+n*interval '2 minutes',
-    '2020-01-01 00:01Z'::timestamptz+n*interval '2 minutes','nap','intentional','exact','exact' from generate_series(1,1005)n`,[owner]);
+    '2020-01-01 00:01Z'::timestamptz+n*interval '2 minutes','nap' from generate_series(1,1005)n`,[owner]);
   const {rows}=await db.query<{backup:{count:number;entries:Record<string,unknown>[]}}>("select public.export_sleep_backup() as backup");
   assert.equal(rows[0].backup.count,1005);assert.equal(rows[0].backup.entries.length,1005);assert.equal("user_id" in rows[0].backup.entries[0],false);
 });
@@ -86,4 +103,17 @@ test("復元の途中で衝突・不正があれば追加済みの分もロー�
   const backup={...rows[0].backup,count:2,entries:[{...original,id:id(2),start_at:"2025-01-02T02:00:00Z",end_at:"2025-01-02T08:00:00Z"},{...original,id:id(3)}]};
   await assert.rejects(db.query("select public.restore_sleep_backup($1::jsonb)",[JSON.stringify(backup)]),{code:"23P01"});
   assert.equal((await db.query("select * from public.sleep_entries")).rows.length,1);
+});
+test("旧形式のバックアップも復元でき、廃止属性だけの差は変更件数に数えない",async()=>{
+  await reset();await insert(1);
+  const {rows}=await db.query<{backup:{entries:Record<string,unknown>[]}}>("select public.export_sleep_backup() as backup");
+  const backup=rows[0].backup;
+  const legacy={...backup,entries:backup.entries.map(entry=>({...entry,intention:"unknown",start_accuracy:"estimated",end_accuracy:"estimated"}))};
+  const result=await db.query<{result:{added:number;kept:number;changed:number}}>("select public.restore_sleep_backup($1::jsonb) as result",[JSON.stringify(legacy)]);
+  assert.deepEqual(result.rows[0].result,{added:0,kept:1,changed:0});
+  await db.query("delete from public.sleep_entries");
+  await db.query("select public.restore_sleep_backup($1::jsonb)",[JSON.stringify(legacy)]);
+  const restored=(await db.query<Record<string,unknown>>("select * from public.sleep_entries")).rows[0];
+  assert.equal(restored.kind,"normal");assert.equal(restored.id,id(1));
+  for(const key of ["intention","start_accuracy","end_accuracy"])assert.equal(key in restored,false);
 });

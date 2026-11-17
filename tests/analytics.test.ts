@@ -11,7 +11,7 @@ function entry(n: number, start: string, end: string, kind: Kind = "normal"): Sl
     id: `aaaaaaaa-aaaa-4aaa-8aaa-${String(n).padStart(12, "0")}`,
     user_id: "99999999-9999-4999-8999-000000000001",
     start_at: fromJst(start.slice(0, 10), start.slice(11)), end_at: fromJst(end.slice(0, 10), end.slice(11)),
-    kind, intention: "unknown", start_accuracy: "exact", end_accuracy: "exact", record_timezone: "Asia/Tokyo",
+    kind, record_timezone: "Asia/Tokyo",
     note: null, created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z", revision: 1,
   };
 }
@@ -66,24 +66,21 @@ test("寝落ちの開始時刻の4時間境界を日本時間で分類する", (
   const data = analyze(sleeps, periodRange("2026-10-12", "week"), "2026-10-18");
   assert.deepEqual(data.dozeHours.map(bin => bin.count), [2, 1, 0, 0, 0, 1]);
 });
-test("その他も含めた時間の割合と昼寝＋寝落ちを集計し、推定を保持する", () => {
+test("その他も含めた時間の割合と昼寝＋寝落ちを集計する", () => {
   const sleeps = [entry(1, "2026-10-12 01:00", "2026-10-12 05:00"), entry(2, "2026-10-12 12:00", "2026-10-12 13:00", "nap"), entry(3, "2026-10-12 15:00", "2026-10-12 17:00", "doze"), entry(4, "2026-10-12 20:00", "2026-10-12 21:00", "other")];
-  sleeps[2].start_accuracy = "estimated";
   const data = analyze(sleeps, periodRange("2026-10-12", "week"), "2026-10-18");
   assert.equal(data.minutes, 480); assert.equal(data.napAndDoze, 180);
   assert.deepEqual(data.shares, { normal: 50, nap: 12.5, doze: 25, other: 12.5 });
-  assert.equal(data.estimated, true); assert.equal(data.estimatedDozeStarts, true);
 });
-test("時刻の推移は1日に複数回の端点をすべて保持し、それぞれの精度と境界日を使う", () => {
+test("時刻の推移は1日に複数回の端点をすべて保持し、実際の境界日を使う", () => {
   const sleeps = [entry(1, "2026-09-30 23:00", "2026-10-01 07:00"), entry(2, "2026-10-01 12:00", "2026-10-01 13:00", "nap"), entry(3, "2026-10-01 17:00", "2026-10-01 18:00", "doze"), entry(4, "2026-10-31 23:00", "2026-11-01 00:00")];
-  sleeps[2].start_accuracy = "estimated";
   const range = periodRange("2026-10-01", "month");
   const points = timePoints(sleeps, range);
   assert.equal(points.length, 6);
   assert.equal(points.filter(point => point.day === "2026-10-01").length, 5);
   assert.equal(points.some(point => point.day === "2026-11-01"), false);
   const doze = timePoints(sleeps, range, "doze");
-  assert.equal(doze.length, 2); assert.equal(doze[0].minute, 1020); assert.equal(doze[0].estimated, true); assert.equal(doze[1].estimated, false);
+  assert.equal(doze.length, 2); assert.equal(doze[0].minute, 1020);
 });
 
 test("年間表示は両端だけを記録日まで詰め、途中の未記録日は残す", () => {

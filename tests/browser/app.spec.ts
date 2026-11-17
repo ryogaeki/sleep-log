@@ -7,9 +7,9 @@ async function menu(page:Page,label:string){
   await button.click();
 }
 async function chooseDay(page:Page,day:string){await menu(page,"カレンダー");await page.getByRole("button",{name:new RegExp(`^${day} `)}).click();}
-test("日別の複数記録と推定合計を表示し、横にはみ出さない",async({page},info)=>{
+test("日別の複数記録と合計を表示し、横にはみ出さない",async({page},info)=>{
   const errors:string[]=[];page.on("pageerror",error=>errors.push(error.message));
-  await enter(page);await expect(page.locator(".summary-total")).toHaveText(/約13時間30分/);
+  await enter(page);await expect(page.locator(".summary-total")).toHaveText(/13時間30分/);
   await expect(page.locator(".demo-banner strong")).toHaveText("体験モード");
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
   expect(errors).toEqual([]);await page.screenshot({path:`/tmp/sleep-log-${info.project.name}.png`,fullPage:true});
@@ -17,13 +17,14 @@ test("日別の複数記録と推定合計を表示し、横にはみ出さな�
 test("日付をまたぐ記録を追加・編集・削除し、両日へ配分する",async({page})=>{
   await enter(page);await chooseDay(page,"2026-10-10");await page.locator(".add-record-dashed").click();
   const form=page.getByRole("dialog");await form.getByRole("button",{name:"寝落ち",exact:true}).click();
-  await expect(form.getByRole("button",{name:"意図せず",exact:true})).toHaveAttribute("aria-pressed","true");
+  await expect(form.getByRole("group",{name:"眠った意図"})).toHaveCount(0);
+  await expect(form.getByLabel("時刻は推定")).toHaveCount(0);
   await form.getByLabel("開始日",{exact:true}).fill("2026-10-10");await form.getByLabel("開始時刻",{exact:true}).fill("23:00");
   await form.getByLabel("終了日",{exact:true}).fill("2026-10-11");await form.getByLabel("終了時刻",{exact:true}).fill("07:00");
   await expect(form.locator(".duration-preview")).toContainText("8時間");
   await form.getByRole("button",{name:"保存する",exact:true}).click();await expect(form).not.toBeVisible();
-  await expect(page.locator(".summary-total")).toHaveText(/約1時間0分/);
-  await chooseDay(page,"2026-10-11");await expect(page.locator(".summary-total")).toHaveText(/約7時間0分/);
+  await expect(page.locator(".summary-total")).toHaveText(/1時間0分/);
+  await chooseDay(page,"2026-10-11");await expect(page.locator(".summary-total")).toHaveText(/7時間0分/);
   await expect(page.locator(".record-card")).toHaveCount(1);await page.locator(".record-card").click();
   await form.locator("summary").click();await form.getByLabel("ノート",{exact:true}).fill("日付またぎをあとから記録");
   await form.getByRole("button",{name:"保存する",exact:true}).click();await expect(page.locator(".record-note")).toHaveText("日付またぎをあとから記録");
@@ -61,8 +62,9 @@ test("週間と月間の分析・全件の時刻・種類の絞り込みを表�
   const errors:string[]=[];page.on("pageerror",error=>errors.push(error.message));
   await enter(page);await menu(page,"分析");
   await expect(page.getByRole("heading",{name:"眠りの分析",exact:true})).toBeVisible();
-  await expect(page.locator('[aria-label="1日平均の睡眠時間"]')).toContainText("約9時間13分");
-  await expect(page.locator('[aria-label="期間の合計睡眠時間"]')).toContainText("約27時間40分");
+  await expect(page.locator(".analysis-page")).not.toContainText("推定");
+  await expect(page.locator('[aria-label="1日平均の睡眠時間"]')).toContainText("9時間13分");
+  await expect(page.locator('[aria-label="期間の合計睡眠時間"]')).toContainText("27時間40分");
   await expect(page.locator(".timeline-segment")).toHaveCount(6);
   await expect(page.locator(".time-point")).toHaveCount(12);
   await page.getByLabel("時刻グラフの種類").selectOption("doze");
@@ -77,7 +79,7 @@ test("週間と月間の分析・全件の時刻・種類の絞り込みを表�
       return axis.left>=viewport.left-1&&axis.right<=viewport.right+1;
     })).toBe(true);
   }
-  expect(await page.getByRole("button",{name:/^2026-10-17 約13時間30分 日別/}).evaluate(el=>{
+  expect(await page.getByRole("button",{name:/^2026-10-17 13時間30分 日別/}).evaluate(el=>{
     const box=el.getBoundingClientRect();const viewport=el.closest(".chart-scroll")!.getBoundingClientRect();
     return box.left+box.width/2>=viewport.left&&box.left+box.width/2<=viewport.right;
   })).toBe(true);
@@ -95,30 +97,30 @@ test("月をまたぐ週のタイムラインから編集し、週と各月の�
   await page.addInitScript(()=>{
     sessionStorage.setItem("sleep-log-demo-v1",JSON.stringify([{
       id:"aaaaaaaa-aaaa-4aaa-8aaa-000000000001",user_id:"99999999-9999-4999-8999-000000000001",
-      start_at:"2026-09-30T14:00:00.000Z",end_at:"2026-09-30T22:00:00.000Z",kind:"normal",intention:"intentional",
-      start_accuracy:"estimated",end_accuracy:"exact",record_timezone:"Asia/Tokyo",note:null,
+      start_at:"2026-09-30T14:00:00.000Z",end_at:"2026-09-30T22:00:00.000Z",kind:"normal",
+      record_timezone:"Asia/Tokyo",note:null,
       created_at:"2026-10-01T00:00:00Z",updated_at:"2026-10-01T00:00:00Z",revision:1,
     }]));
   });
   await page.goto("./");await page.getByRole("button",{name:"画面を体験する",exact:true}).click();
   await chooseDay(page,"2026-10-01");await menu(page,"分析");
-  await expect(page.locator('[aria-label="期間の合計睡眠時間"]')).toContainText("約8時間");
+  await expect(page.locator('[aria-label="期間の合計睡眠時間"]')).toContainText("8時間");
   await expect(page.locator(".timeline-segment")).toHaveCount(2);
   await page.locator(".timeline-segment").first().focus();
   await expect(page.locator(".timeline-segment.highlighted")).toHaveCount(2);
   await page.locator(".timeline-segment.continues-before").click();
   const form=page.getByRole("dialog");await expect(form.getByLabel("開始日",{exact:true})).toHaveValue("2026-09-30");
   await form.getByLabel("終了時刻",{exact:true}).fill("08:00");await form.getByRole("button",{name:"保存する",exact:true}).click();
-  await expect(form).not.toBeVisible();await expect(page.locator('[aria-label="期間の合計睡眠時間"]')).toContainText("約9時間");
+  await expect(form).not.toBeVisible();await expect(page.locator('[aria-label="期間の合計睡眠時間"]')).toContainText("9時間");
   await page.getByRole("button",{name:"月間",exact:true}).click();
-  await expect(page.locator('[aria-label="期間の合計睡眠時間"]')).toContainText("約8時間");
+  await expect(page.locator('[aria-label="期間の合計睡眠時間"]')).toContainText("8時間");
   await page.getByRole("button",{name:"前の分析期間",exact:true}).click();
-  await expect(page.locator('[aria-label="期間の合計睡眠時間"]')).toContainText("約1時間");
+  await expect(page.locator('[aria-label="期間の合計睡眠時間"]')).toContainText("1時間");
 });
 
 test("未記録期間の平均を空欄にし、棒グラフの日付から日別記録を開く",async({page})=>{
   await enter(page);await menu(page,"分析");
-  await page.getByRole("button",{name:/^2026-10-17 約13時間30分 日別/}).click();
+  await page.getByRole("button",{name:/^2026-10-17 13時間30分 日別/}).click();
   await expect(page.locator(".record-card")).toHaveCount(3);
   await chooseDay(page,"2026-10-01");await menu(page,"分析");
   await expect(page.locator('[aria-label="1日平均の睡眠時間"] strong')).toHaveText("—");
@@ -134,7 +136,7 @@ test("年間・全期間の両端を詰め、基準日入力を表示しない",
   await expect(page.locator(".daily-chart-day")).toHaveCount(3);
   await expect(page.locator(".analysis-display-range")).toContainText("10月15日");
   await expect(page.locator(".analysis-display-range")).toContainText("10月17日");
-  await expect(page.locator('[aria-label="期間の合計睡眠時間"]')).toContainText("約27時間40分");
+  await expect(page.locator('[aria-label="期間の合計睡眠時間"]')).toContainText("27時間40分");
   await page.getByRole("button",{name:"全期間",exact:true}).click();
   await expect(page.locator(".timeline-row")).toHaveCount(3);
   await expect(page.getByRole("button",{name:"前の分析期間"})).toHaveCount(0);
@@ -151,7 +153,7 @@ async function enterHistory(page:Page){
       {start_at:"2025-12-31T14:00:00.000Z",end_at:"2025-12-31T17:00:00.000Z",note:"年越しのノート"},
       {start_at:"2026-02-09T18:00:00.000Z",end_at:"2026-02-09T23:00:00.000Z",note:"  "},
       {start_at:"2026-10-16T17:00:00.000Z",end_at:"2026-10-16T23:00:00.000Z",note:"最近のノート"},
-    ].map((item,index)=>({...item,id:`aaaaaaaa-aaaa-4aaa-8aaa-${String(index+1).padStart(12,"0")}`,user_id:"99999999-9999-4999-8999-000000000001",kind:"normal",intention:"intentional",start_accuracy:"exact",end_accuracy:"exact",record_timezone:"Asia/Tokyo",created_at:"2026-01-01T00:00:00Z",updated_at:"2026-01-01T00:00:00Z",revision:1}));
+    ].map((item,index)=>({...item,id:`aaaaaaaa-aaaa-4aaa-8aaa-${String(index+1).padStart(12,"0")}`,user_id:"99999999-9999-4999-8999-000000000001",kind:"normal",record_timezone:"Asia/Tokyo",created_at:"2026-01-01T00:00:00Z",updated_at:"2026-01-01T00:00:00Z",revision:1}));
     sessionStorage.setItem("sleep-log-demo-v1",JSON.stringify(entries));
   });
   await page.goto("./");await page.getByRole("button",{name:"画面を体験する",exact:true}).click();
@@ -208,5 +210,56 @@ test("スマホのデータ管理を上部メニューから開き、キャッ�
   for(const text of ["眠りのひとつひとつを、ありのままに。","睡眠のリズムを、少しずつ知る。","あなたの眠りを、あなたのために。","大切な記録を、手元にも。"]){
     await expect(page.getByText(text,{exact:true})).toHaveCount(0);
   }
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
+});
+
+test("分析の週間・月間・年間・全期間を画面移動と再読み込み後も保持する",async({page})=>{
+  await enter(page);await menu(page,"分析");
+  for(const label of ["月間","年間","全期間","週間"]){
+    await page.getByRole("button",{name:label,exact:true}).click();
+    await menu(page,"ノート");await menu(page,"分析");
+    await expect(page.getByRole("button",{name:label,exact:true})).toHaveAttribute("aria-pressed","true");
+    await page.reload();await page.getByRole("button",{name:"画面を体験する",exact:true}).click();await menu(page,"分析");
+    await expect(page.getByRole("button",{name:label,exact:true})).toHaveAttribute("aria-pressed","true");
+  }
+});
+
+test("ノートを4行に収め、日付・時刻を枠の外に置き、前日表示の設定を保持する",async({page},info)=>{
+  const longNote="その日の出来事を振り返って書いた、長いノートの文章です。".repeat(14)+"\n最後の行も編集画面で読めます。";
+  await page.clock.install({time:new Date("2026-10-18T12:00:00Z")});
+  await page.addInitScript(({longNote})=>{
+    const entries=[
+      {start_at:"2025-12-31T17:00:00.000Z",end_at:"2025-12-31T23:00:00.000Z",note:longNote,kind:"normal"},
+      {start_at:"2026-01-01T04:00:00.000Z",end_at:"2026-01-01T05:00:00.000Z",note:"授業の課題が終わった。明日の準備も済ませた。",kind:"nap"},
+      {start_at:"2025-12-30T17:00:00.000Z",end_at:"2025-12-30T23:00:00.000Z",note:"年末の記録。\nこの改行も残す。",kind:"normal"},
+    ].map((entry,index)=>({...entry,id:`aaaaaaaa-aaaa-4aaa-8aaa-${String(index+1).padStart(12,"0")}`,user_id:"99999999-9999-4999-8999-000000000001",record_timezone:"Asia/Tokyo",created_at:"2026-01-01T00:00:00Z",updated_at:"2026-01-01T00:00:00Z",revision:1}));
+    sessionStorage.setItem("sleep-log-demo-v1",JSON.stringify(entries));
+  },{longNote});
+  await page.goto("./");await page.getByRole("button",{name:"画面を体験する",exact:true}).click();await menu(page,"ノート");
+  const toggle=page.getByRole("switch",{name:"ノートの日付を1日前に表示"});
+  await expect(toggle).toBeChecked();await expect(page.locator(".note-day")).toHaveCount(2);
+  await expect(page.locator(".note-day-heading time").first()).toHaveAttribute("datetime","2025-12-31");
+  await expect(page.locator(".note-day").first().locator(".note-card")).toHaveCount(2);
+  await expect(page.locator(".note-card .note-sleep, .note-card time")).toHaveCount(0);
+  const card=page.getByRole("button",{name:"2026-01-01 通常睡眠のノートを編集",exact:true});
+  expect(await card.locator(".note-body").evaluate(el=>{
+    const style=getComputedStyle(el);return style.webkitLineClamp==="4" && el.clientHeight<el.scrollHeight && el.clientHeight<=parseFloat(style.lineHeight)*4+1;
+  })).toBe(true);
+  await card.click();const form=page.getByRole("dialog");
+  await expect(form.getByLabel("開始日",{exact:true})).toHaveValue("2026-01-01");
+  await expect(form.getByLabel("ノート",{exact:true})).toHaveValue(longNote);
+  await form.getByRole("button",{name:"閉じる",exact:true}).click();
+  await expect(card).toBeFocused();
+  await expect(page.getByRole("link",{name:"本文へ移動",exact:true})).not.toBeInViewport();
+  await page.screenshot({path:`/tmp/sleep-log-compact-notes-${info.project.name}.png`,fullPage:true});
+  await toggle.uncheck();await expect(page.locator(".note-day-heading time").first()).toHaveAttribute("datetime","2026-01-01");
+  await page.getByLabel("ノートを検索").fill("2026-01-01");await expect(page.locator(".note-card")).toHaveCount(2);
+  await page.getByLabel("ノートを検索").fill("");
+  await menu(page,"分析");await page.getByRole("button",{name:"全期間",exact:true}).click();
+  await expect(page.locator('[aria-label="期間の合計睡眠時間"]')).toContainText("13時間");
+  await menu(page,"ノート");await expect(toggle).not.toBeChecked();
+  await page.reload();await page.getByRole("button",{name:"画面を体験する",exact:true}).click();await menu(page,"ノート");
+  await expect(toggle).not.toBeChecked();await expect(page.locator(".note-day-heading time").first()).toHaveAttribute("datetime","2026-01-01");
+  await toggle.check();await page.getByLabel("ノートを検索").fill("2025-12-31");await expect(page.locator(".note-card")).toHaveCount(2);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
 });

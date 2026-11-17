@@ -12,9 +12,9 @@ export function Calendar({ selected, entries, compact = false, onSelect, onMonth
       {Array.from({length:42},(_,i)=>shiftDay(start,i)).map(day=>{
         const data = summary(entries,day);
         const outside = day.slice(0,7) !== selected.slice(0,7);
-        return <button key={day} type="button" aria-label={`${day} ${data.records.length ? `記録合計${data.estimated ? "約" : ""}${data.minutes}分` : "未記録"}`} aria-pressed={day===selected} className={`calendar-day ${day===selected ? "selected" : ""} ${day===today ? "is-today" : ""} ${outside ? "outside" : ""}`} onClick={()=>onSelect(day)}>
+        return <button key={day} type="button" aria-label={`${day} ${data.records.length ? `記録合計${data.minutes}分` : "未記録"}`} aria-pressed={day===selected} className={`calendar-day ${day===selected ? "selected" : ""} ${day===today ? "is-today" : ""} ${outside ? "outside" : ""}`} onClick={()=>onSelect(day)}>
           <span className="day-number">{Number(day.slice(-2))}</span>
-          {!compact && <span className="calendar-time">{data.records.length ? `${data.estimated ? "約" : ""}${shortDuration(data.minutes)}` : "—"}</span>}
+          {!compact && <span className="calendar-time">{data.records.length ? `${shortDuration(data.minutes)}` : "—"}</span>}
           <span className="calendar-dots">{!outside && KINDS.filter(k=>data.byKind[k]>0).map(k=><i key={k} className={`dot ${k}`} />)}</span>
         </button>;
       })}

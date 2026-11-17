@@ -1,4 +1,4 @@
-import { AppError, overlap, sameContent, validateInput, type SleepEntry, type SleepInput } from "./sleep";
+import { AppError, inputOnly, overlap, sameContent, validateInput, type SleepEntry, type SleepInput } from "./sleep";
 export interface Backup {
   format: "sleep-log-backup";
   version: 1;
@@ -8,7 +8,7 @@ export interface Backup {
   entries: SleepInput[];
 }
 export function makeBackup(entries: SleepEntry[]): Backup {
-  return { format: "sleep-log-backup", version: 1, exported_at: new Date().toISOString(), timezone: "Asia/Tokyo", count: entries.length, entries: entries.map(({ user_id: _owner, ...entry }) => entry) };
+  return { format: "sleep-log-backup", version: 1, exported_at: new Date().toISOString(), timezone: "Asia/Tokyo", count: entries.length, entries: entries.map(entry => ({ ...inputOnly(entry), created_at: entry.created_at, updated_at: entry.updated_at, revision: entry.revision })) };
 }
 export function parseBackup(raw: unknown, now = Date.now()): Backup {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new AppError("invalid", "Sleep Logのバックアップファイルを選んでください。");

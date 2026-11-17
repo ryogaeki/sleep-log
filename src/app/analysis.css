@@ -715,9 +715,6 @@
   background:#448b7d;
   transform:rotate(45deg)
 }
-.time-point.estimated i{
-  background:white
-}
 .time-point:hover{
   z-index:2;
   background:#75609514;

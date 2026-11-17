@@ -1,6 +1,6 @@
 # Sleep Log：設定・公開の見返しノート
 
-更新日：2026-11-10
+更新日：2026-11-17
 
 - アプリ：**[https://ryogaeki.github.io/sleep-log/](https://ryogaeki.github.io/sleep-log/)**
 - コードの保管先：[ryogaeki/sleep-log](https://github.com/ryogaeki/sleep-log)
@@ -19,7 +19,7 @@
 | GitHub Actions | 検査・ビルド・公開を自動で行う | 公開用のワークフロー |
 | GitHub Pages | iPhoneやPCにアプリの画面を配る | HTML・JavaScript・CSS |
 | Supabase Auth | 誰がログインしたかを確認する | アプリの利用者ID |
-| SupabaseのDB | 睡眠記録を保存する | 日時・種類・推定・メモなど |
+| SupabaseのDB | 睡眠記録を保存する | 日時・種類・ノートなど |
 
 PCでコードを編集 → Gitで履歴を作る → GitHubへ送る → Actionsがビルド → Pagesの画面が更新される。
 
@@ -37,7 +37,7 @@ PCでコードを編集 → Gitで履歴を作る → GitHubへ送る → Action
 
 ## 2. 記録の表とアクセス制限を作る【初回・成功後は再実行しない】
 
-**操作**：「SQL Editor」で `01_setup_sleep_log` というクエリーを作り、[用意済みのSQL](supabase/migrations/202610180001_sleep_log.sql) 全体を貼り付けて「Run」を押す。
+**操作**：「SQL Editor」で `01_setup_sleep_log` というクエリーを作り、[用意済みのSQL](supabase/migrations/202610180001_sleep_log.sql) 全体を貼り付けて「Run」を押す。 新規設定の場合は、続けて別のクエリー `03_remove_sleep_flags` で [更新SQL](supabase/migrations/202611170001_remove_sleep_flags.sql) も実行し、現在の入力項目に合わせる。既に利用中なら初期SQLは実行せず、手順17の更新だけ行う。
 
 **要約**：睡眠記録の入れ物と、保存時のルールを作った。
 
@@ -275,7 +275,7 @@ rsvg-convert --width=180 --height=180 --background-color='#eeecfb' --output=publ
 
 ## 16. ノート一覧と年間・全期間の分析を使う
 
-**操作**：「ノート」を開くと、睡眠記録に入力したノートを全期間から新しい順に読める。内容・日付・睡眠の種類で検索でき、鉛筆ボタンから元の睡眠記録を編集できる。表示が50件を超える場合は「さらに表示」で続きが読める。
+**操作**：「ノート」を開くと、睡眠記録に入力したノートを全期間から新しい順に読める。内容・日付・睡眠の種類で検索でき、本文のカードから元の睡眠記録を編集できる。表示が50件を超える場合は「さらに表示」で続きが読める。
 
 **要約**：以前「メモ」と表示していた欄を「ノート」に統一し、日付ごとの画面を開かずにまとめて読めるようにした。
 
@@ -287,7 +287,7 @@ rsvg-convert --width=180 --height=180 --background-color='#eeecfb' --output=publ
 
 **表示範囲**：年間は選択した年の記録、全期間は保存済みのすべての記録を集計する。この2つは両端の未記録部分を省き、最初と最後の記録がある日まで表示する。途中の未記録日は残し、平均の分母に入れない。年をまたぐ睡眠も各年の実際の時間に配分する。
 
-**確認**：古い年のノートも一覧に出る。年間・全期間で昔の睡眠も集計される。この変更に伴うSupabaseの表の作り直しやSQLの再実行は不要。
+**確認**：古い年のノートも一覧に出る。年間・全期間で昔の睡眠も集計される。分析・一覧の追加だけならSupabaseの変更は不要。2026-11-17の項目削除には次の手順17の更新SQLが必要。
 
 ## 参考にした公式の説明
 
@@ -297,3 +297,17 @@ rsvg-convert --width=180 --height=180 --background-color='#eeecfb' --output=publ
 - [Supabase：無料プロジェクトの休止](https://supabase.com/docs/guides/platform/free-project-pausing)
 - [GitHub：Pagesのワークフロー](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages)
 - [Apple：ホーム画面用のアイコン設定](https://developer.apple.com/library/archive/documentation/AppleApplications/Reference/SafariWebContent/ConfiguringWebApplications/ConfiguringWebApplications.html)
+
+## 17. 眠った意図・推定チェックの削除とノート表示の更新【今回1回】
+
+**操作**：[更新手順](UPDATE_20261117.md) に沿い、SQL Editorで `03_remove_sleep_flags` というクエリーを作り、[更新SQL](supabase/migrations/202611170001_remove_sleep_flags.sql) 全体を実行する。続いてコミット済みコードをpushし、Actionsの成功後にアプリを開き直す。
+
+**要約**：眠った意図と時刻精度の3列を削除する。睡眠日時・種類・ノート・利用許可はそのまま残す。プロジェクトとOAuthの作り直しは不要。
+
+**軽い解説**：初期SQLは空のプロジェクトを作るもの、今回のSQLは利用中の表を更新するもの。旧バックアップの廃止項目は無視し、残す項目を復元できるように処理も変更している。
+
+**ノートの操作**：同じ日付でまとめ、本文を4行まで表示する。日付・実際の睡眠時刻は枠の外。本文を押して全文を読む。「ノートの日付を1日前に表示」は初期ONで、睡眠開始日の前日の内容として扱う。OFFで元の日付に戻る。睡眠の時刻や集計は変更しない。
+
+**設定保持**：ノートの前日表示と、分析の週間・月間・年間・全期間は画面移動・再読み込み後も保持する。表示設定だけをブラウザーに利用者別で保存する仕組みで、PCとiPhoneでは別々に設定する。
+
+**確認**：新しい睡眠を保存・編集できる。ノートの日付を切り替えても睡眠日時や分析の合計は変わらない。分析で月間を選んで別のページへ移動して戻ると、月間のまま表示される。

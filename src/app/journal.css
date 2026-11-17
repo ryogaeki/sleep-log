@@ -82,14 +82,25 @@
 .notes-search input:focus { outline: 0; }
 .notes-search input::placeholder { font-size: 12px; color: #8b7a97; }
 .notes-count { white-space: nowrap; color: #7c6c87; font-size: 12px; }
-.notes-list { display: grid; gap: 17px; }
-.note-card { padding: 23px 25px; min-width: 0; }
-.note-card > header { display: flex; align-items: flex-start; gap: 15px; justify-content: space-between; }
-.note-card h2 { font-size: 15px; color: #625070; font-weight: 600; }
-.note-card .icon-button { width: 44px; height: 44px; margin: -7px -9px 0 0; flex-shrink: 0; }
-.note-sleep { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin-top: 6px; color: #82718f; font-size: 11px; }
+.notes-display-setting { margin: -6px 0 14px; }
+.notes-date-switch { display: inline-flex; align-items: center; gap: 9px; min-height: 44px; color: #675278; font-size: 13px; cursor: pointer; }
+.notes-date-switch input { appearance: none; position: relative; width: 36px; height: 22px; border-radius: 12px; background: #b5adbe; border: 0; cursor: pointer; flex-shrink: 0; }
+.notes-date-switch input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: white; transition: transform .15s; }
+.notes-date-switch input:checked { background: #8171c7; }
+.notes-date-switch input:checked::after { transform: translateX(14px); }
+.notes-display-setting p, .notes-preview-help { font-size: 11px; color: #81708e; line-height: 1.6; }
+.notes-preview-help { margin-bottom: 18px; }
+.notes-list { display: grid; gap: 22px; }
+.note-day { min-width: 0; }
+.note-day-heading { font-size: 18px; color: #625070; font-weight: 500; margin-bottom: 8px; }
+.note-entry + .note-entry { margin-top: 9px; }
+.note-card { display: block; text-align: left; width: 100%; padding: 13px 16px; min-width: 0; cursor: pointer; }
+.note-card:hover { border-color: #c9b9dd; background: #fdfbff; }
+.note-sleep { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin: 0 3px 5px; color: #82718f; font-size: 11px; line-height: 1.5; }
 .note-sleep > span { font-variant-numeric: tabular-nums; }
-.note-body { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; color: #554662; line-height: 1.95; margin-top: 18px; }
+.note-body { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; color: #554662; line-height: 1.55; }
+.time-tools:has(> .now-button:only-child) { justify-content: flex-end; }
+.time-tools:empty { display: none; }
 .notes-more { display: flex; margin: 24px auto 0; }
 .notes-empty { padding: 45px 24px; text-align: center; color: #81708e; font-size: 12px; }
 .notes-empty > svg { margin-bottom: 14px; color: #9781b3; }
@@ -111,11 +122,12 @@
   .notes-search { padding: 0 10px; gap: 7px; }
   .notes-search input { font-size: 16px; }
   .notes-search input::placeholder { font-size: 10px; }
-  .note-card { padding: 20px 19px; }
-  .note-card h2 { font-size: 14px; }
+  .note-card { padding: 12px 14px; }
+  .note-day-heading { font-size: 17px; }
   .note-sleep { font-size: 10px; gap: 5px; }
-  .note-body { font-size: 13px; margin-top: 15px; }
-  .notes-list { gap: 14px; }
+  .note-body { font-size: 14px; }
+  .notes-list { gap: 20px; }
+  .notes-display-setting p, .notes-preview-help { font-size: 10px; }
   .analysis-controls { flex-wrap: nowrap; gap: 8px; }
   .analysis-period button { padding: 8px 7px; font-size: 11px; white-space: nowrap; }
   .analysis-controls > .today-button { flex-shrink: 0; font-size: 11px; padding: 7px 9px; }
