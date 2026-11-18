@@ -1,8 +1,11 @@
 import type { Metadata, Viewport } from "next";
+import localFont from "next/font/local";
 import "./globals.css";
 import "./analysis.css";
 import "./journal.css";
+import "./refinements.css";
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+const rounded = localFont({ src: "../../public/fonts/zen-maru-gothic-regular.woff2", weight: "400", style: "normal", display: "swap", variable: "--font-rounded" });
 export const metadata: Metadata = {
   title: "Sleep Log — 睡眠記録",
   description: "睡眠の日時・種類・ノートの記録と、睡眠時間の集計・分析。",
@@ -13,4 +16,4 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#f7f8fc" };
-export default function RootLayout({children}:{children:React.ReactNode}) { return <html lang="ja"><body><a href="#main-content" className="skip-link">本文へ移動</a>{children}</body></html>; }
+export default function RootLayout({children}:{children:React.ReactNode}) { return <html lang="ja" className={rounded.variable}><body><a href="#main-content" className="skip-link">本文へ移動</a>{children}</body></html>; }

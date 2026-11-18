@@ -88,6 +88,7 @@ export function validateInput(raw: unknown, now = Date.now()): SleepInput {
   if (!KINDS.includes(x.kind as Kind)) throw new AppError("invalid", "睡眠の種類を選んでください。");
   if (x.record_timezone !== "Asia/Tokyo") throw new AppError("invalid", "初期版は日本時間の記録に対応しています。");
   if (x.note !== null && typeof x.note !== "string") throw new AppError("invalid", "ノートはテキストで入力してください。");
+  if (typeof x.note === "string") x.note = x.note.trimEnd();
   if (typeof x.note === "string" && [...x.note].length > 2000) throw new AppError("invalid", "ノートは2,000文字以内にしてください。");
   return inputOnly({ ...x, note: x.note === "" ? null : x.note } as unknown as SleepInput);
 }

@@ -1,5 +1,6 @@
 import { dayOf, shiftDay, shiftMonth, monthStart, fromJst, summary, shortDuration, KINDS, type SleepEntry } from "../lib/sleep";
 import { Icon } from "./Icon";
+import { SleepRing } from "./SleepRing";
 export function Calendar({ selected, entries, compact = false, onSelect, onMonth }: { selected: string; entries: SleepEntry[]; compact?: boolean; onSelect: (day:string)=>void; onMonth:(day:string)=>void }) {
   const first = monthStart(selected);
   const weekday = (new Date(fromJst(first,"12:00")).getUTCDay() + 6) % 7;
@@ -14,11 +15,12 @@ export function Calendar({ selected, entries, compact = false, onSelect, onMonth
         const outside = day.slice(0,7) !== selected.slice(0,7);
         return <button key={day} type="button" aria-label={`${day} ${data.records.length ? `記録合計${data.minutes}分` : "未記録"}`} aria-pressed={day===selected} className={`calendar-day ${day===selected ? "selected" : ""} ${day===today ? "is-today" : ""} ${outside ? "outside" : ""}`} onClick={()=>onSelect(day)}>
           <span className="day-number">{Number(day.slice(-2))}</span>
-          {!compact && <span className="calendar-time">{data.records.length ? `${shortDuration(data.minutes)}` : "—"}</span>}
+          {!compact && <span className="calendar-sleep"><SleepRing minutes={data.minutes} /><span className="calendar-time">{data.records.length ? shortDuration(data.minutes) : "—"}</span></span>}
           <span className="calendar-dots">{!outside && KINDS.filter(k=>data.byKind[k]>0).map(k=><i key={k} className={`dot ${k}`} />)}</span>
         </button>;
       })}
     </div>
+    {!compact && <p className="calendar-ring-key">円は1周12時間。超えた分はオレンジの2周目で表示します。</p>}
     <div className="calendar-footer"><span><i className="today-mark"/> 今日</span><button type="button" className="text-button" onClick={()=>onSelect(today)}>今日に戻る</button></div>
   </section>;
 }

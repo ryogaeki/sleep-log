@@ -25,10 +25,10 @@ test("日付をまたぐ記録を追加・編集・削除し、両日へ配分�
   await form.getByRole("button",{name:"保存する",exact:true}).click();await expect(form).not.toBeVisible();
   await expect(page.locator(".summary-total")).toHaveText(/1時間0分/);
   await chooseDay(page,"2026-10-11");await expect(page.locator(".summary-total")).toHaveText(/7時間0分/);
-  await expect(page.locator(".record-card")).toHaveCount(1);await page.locator(".record-card").click();
+  await expect(page.locator(".record-card")).toHaveCount(1);await page.locator(".record-main").click();
   await form.locator("summary").click();await form.getByLabel("ノート",{exact:true}).fill("日付またぎをあとから記録");
   await form.getByRole("button",{name:"保存する",exact:true}).click();await expect(page.locator(".record-note")).toHaveText("日付またぎをあとから記録");
-  await page.locator(".record-card").click();page.once("dialog",dialog=>dialog.accept());
+  await page.locator(".record-main").click();page.once("dialog",dialog=>dialog.accept());
   await form.getByRole("button",{name:"この記録を削除する",exact:true}).click();await expect(form).not.toBeVisible();
   await expect(page.locator(".summary-total")).toHaveText("—");await expect(page.getByText("この日の睡眠は、まだ記録されていません。")).toBeVisible();
 });
@@ -246,6 +246,7 @@ test("ノートの改行を4行プレビューで詰め、1件だけ全文を展
   await expect(page.getByText("睡眠開始日の前日で表示しています。",{exact:false})).toHaveCount(0);
   await expect(page.locator(".notes-preview-help")).toHaveCount(0);
   await expect(page.locator(".note-sleep-time").first()).toHaveText("13:00〜14:00");
+  await expect(page.locator(".note-sleep-duration").first()).toHaveText("1時間");
   expect(await page.locator(".note-entry-header").first().evaluate(el=>{
     const day=el.querySelector(".note-date-day")!,month=el.querySelector(".note-date-month")!;
     const date=el.querySelector("time")!.getBoundingClientRect(),dot=el.querySelector(".dot")!.getBoundingClientRect();
@@ -265,6 +266,7 @@ test("ノートの改行を4行プレビューで詰め、1件だけ全文を展
   expect(await body.evaluate(el=>el.clientHeight>=el.scrollHeight)).toBe(true);
   await expect(body).toHaveText(longNote);
   await expect(edit).toBeVisible();
+  await expect(page.locator(".note-card .note-actions")).toHaveCount(0);
   await page.screenshot({path:`/tmp/sleep-log-expanded-note-${info.project.name}.png`,fullPage:true});
   await page.getByRole("button",{name:"2026-01-01 昼寝のノートを全文表示",exact:true}).click();
   await expect(page.locator(".note-card.expanded")).toHaveCount(1);await expect(edit).toHaveCount(0);
@@ -287,4 +289,66 @@ test("ノートの改行を4行プレビューで詰め、1件だけ全文を展
   await expect(toggle).not.toBeChecked();await expect(page.locator(".note-day-heading time").first()).toHaveAttribute("datetime","2026-01-01");
   await toggle.check();await page.getByLabel("ノートを検索").fill("2025-12-31");await expect(page.locator(".note-card")).toHaveCount(2);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
+});
+
+test("日別のノートだけを展開し、末尾の空行を除いて保存する。日時入力は狭い幅にも収まる",async({page},info)=>{
+  await enter(page);
+  await expect(page.getByText("合計は日本時間の0:00で区切って計算しています。",{exact:true})).toHaveCount(0);
+  await expect(page.locator(".app-footer")).toHaveCSS("border-top-width","0px");
+  const first=page.locator(".record-note-toggle").first();
+  await first.click();await expect(first).toHaveAttribute("aria-expanded","true");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.locator(".record-note-toggle").nth(1).click();
+  await expect(first).toHaveAttribute("aria-expanded","false");
+  await expect(page.locator('.record-note-toggle[aria-expanded="true"]')).toHaveCount(1);
+  await page.locator(".record-main").first().click();
+  const form=page.getByRole("dialog");
+  const sizes=info.project.name==="mobile"?[320,390]:[1440];
+  for(const width of sizes){
+    await page.setViewportSize({width,height:900});
+    expect(await form.locator(".datetime-row input").evaluateAll(inputs=>inputs.every(input=>{
+      const field=input.getBoundingClientRect(),block=input.closest(".time-block")!.getBoundingClientRect();
+      return field.left>=block.left&&field.right<=block.right&&input.scrollWidth<=input.clientWidth+1;
+    }))).toBe(true);
+    expect(await form.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
+  }
+  await page.screenshot({path:`/tmp/sleep-log-time-input-${info.project.name}.png`,fullPage:false});
+  const note=form.getByLabel("ノート",{exact:true});
+  await note.fill("  先頭はそのまま\n\n途中の改行も残す\n  \n");
+  await form.getByRole("button",{name:"保存する",exact:true}).click();await expect(form).not.toBeVisible();
+  await page.locator(".record-note-toggle").first().click();
+  expect(await page.locator(".record-note").first().textContent()).toBe("  先頭はそのまま\n\n途中の改行も残す");
+  await menu(page,"ノート");
+  await page.getByRole("button",{name:"2026-10-17 通常睡眠のノートを全文表示"}).click();
+  expect(await page.locator(".note-card.expanded .note-body").textContent()).toBe("  先頭はそのまま\n\n途中の改行も残す");
+});
+
+test("カレンダーの円を12時間で1周、超過を2周目として表示し、時間と一緒にセル内へ収める",async({page},info)=>{
+  await page.clock.install({time:new Date("2026-10-18T12:00:00Z")});
+  await page.addInitScript(()=>{
+    const entries=[
+      ["2026-10-10T00:00:00+09:00","2026-10-10T12:00:00+09:00"],
+      ["2026-10-11T00:00:00+09:00","2026-10-12T00:00:00+09:00"],
+      ["2026-10-13T02:00:00+09:00","2026-10-13T08:00:00+09:00"],
+      ["2026-10-17T00:00:00+09:00","2026-10-17T13:30:00+09:00"],
+    ].map(([start_at,end_at],index)=>({start_at,end_at,id:`aaaaaaaa-aaaa-4aaa-8aaa-${String(index+1).padStart(12,"0")}`,user_id:"99999999-9999-4999-8999-000000000001",kind:"normal",record_timezone:"Asia/Tokyo",note:null,created_at:"2026-01-01T00:00:00Z",updated_at:"2026-01-01T00:00:00Z",revision:1}));
+    sessionStorage.setItem("sleep-log-demo-v1",JSON.stringify(entries));
+  });
+  await page.goto("./");await page.getByRole("button",{name:"画面を体験する",exact:true}).click();await menu(page,"カレンダー");
+  const day=(date:string)=>page.getByRole("button",{name:new RegExp(`^${date} `)});
+  await expect(day("2026-10-10").locator(".sleep-ring-first")).toHaveAttribute("stroke-dasharray","720 720");
+  await expect(day("2026-10-10").locator(".sleep-ring-second")).toHaveCount(0);
+  await expect(day("2026-10-11").locator(".sleep-ring-second")).toHaveAttribute("stroke-dasharray","720 720");
+  await expect(day("2026-10-13").locator(".sleep-ring-first")).toHaveAttribute("stroke-dasharray","360 720");
+  await expect(day("2026-10-17").locator(".sleep-ring-second")).toHaveAttribute("stroke-dasharray","90 720");
+  await expect(day("2026-10-14").locator(".sleep-ring-first")).toHaveCount(0);
+  for(const width of info.project.name==="mobile"?[320,390]:[1440]){
+    await page.setViewportSize({width,height:900});
+    expect(await page.locator(".calendar-sleep").evaluateAll(rows=>rows.every(row=>{
+      const cell=row.closest(".calendar-day")!.getBoundingClientRect();
+      return [...row.children].every(child=>{const box=child.getBoundingClientRect();return box.left>=cell.left&&box.right<=cell.right;});
+    }))).toBe(true);
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
+  }
+  await page.screenshot({path:`/tmp/sleep-log-calendar-rings-${info.project.name}.png`,fullPage:true});
 });

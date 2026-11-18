@@ -18,7 +18,7 @@
 | `end_at` | timestamptz | 終了日時。必須、有限の日時、分単位、開始より後 |
 | `kind` | text | `normal` / `nap` / `doze` / `other` のいずれか。必須 |
 | `record_timezone` | text | 初期版は `Asia/Tokyo` 固定。時刻入力の解釈を保持する |
-| `note` | text、NULL可 | ノート。未入力はNULL、改行可、2,000文字まで。HTMLとして実行しない |
+| `note` | text、NULL可 | ノート。末尾の空白・改行を除去し、空ならNULL。本文途中の改行は可、2,000文字まで。HTMLとして実行しない |
 | `created_at` | timestamptz | DBが設定する作成日時。通常の編集では変更不可 |
 | `updated_at` | timestamptz | DBが設定する最終更新日時 |
 | `revision` | integer | DBが管理する更新番号。新規は1、更新のたびに1増やす |

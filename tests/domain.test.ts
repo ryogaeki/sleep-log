@@ -24,6 +24,13 @@ test("30時間の睡眠と0時終了を扱い、0時間のカードを出さな�
   assert.equal(summary([sleep],"2026-10-18").records.length,0);
   assert.doesNotThrow(()=>validateInput(sleep,now));
 });
+test("ノートは末尾の空白・改行だけを削り、先頭と本文途中の改行を保持する",()=>{
+  const raw=entry(fromJst("2026-10-17","02:00"),fromJst("2026-10-17","08:00"));
+  const note="  先頭の空白\n\n途中の改行\n  \n\t";
+  assert.equal(validateInput({...raw,note},now).note,"  先頭の空白\n\n途中の改行");
+  assert.equal(validateInput({...raw,note:" \n\t"},now).note,null);
+  assert.equal(validateInput({...raw,note:"字".repeat(2000)+"\n  \n"},now).note?.length,2000);
+});
 test("通常睡眠・昼寝・長い寝落ちを同日に登録し、時間を合計する",()=>{
   const values:[string,string,SleepInput["kind"]][]=[["02:00","08:00","normal"],["13:00","14:00","nap"],["17:00","23:30","doze"]];
   const entries=values.map(([a,b,kind],i)=>({...entry(fromJst("2026-10-17",a),fromJst("2026-10-17",b),i+1),kind}));

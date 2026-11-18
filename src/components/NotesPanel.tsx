@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { dateLabel, dayOf, fromJst, shiftDay, timeOf, KIND_LABEL, type SleepEntry } from "../lib/sleep";
+import { dateLabel, dayOf, duration, formatDuration, fromJst, shiftDay, timeOf, KIND_LABEL, type SleepEntry } from "../lib/sleep";
 import { useDisplayPreference } from "../lib/display-preference";
 import { Icon } from "./Icon";
 
@@ -34,11 +34,11 @@ export function NotesPanel({ userId, entries, loading, error, onEdit, onReload }
           return <article className="note-entry" key={entry.id}>
             <header className={`note-entry-header ${index ? "continued" : ""}`}>
               {index === 0 && <h2 className="note-day-heading"><time dateTime={group.day} aria-label={dateLabel(group.day, true)}><span className="note-date-day">{Number(group.day.slice(-2))}</span><span className="note-date-detail"><span className="note-date-weekday">{new Intl.DateTimeFormat("ja-JP", { weekday: "short", timeZone: "Asia/Tokyo" }).format(new Date(fromJst(group.day)))}</span><span className="note-date-month">{group.day.slice(0, 4)}/{Number(group.day.slice(5, 7))}</span></span></time></h2>}
-              <div className="note-sleep"><i className={`dot ${entry.kind}`} /><span className="note-sleep-detail"><span className="note-sleep-kind">{KIND_LABEL[entry.kind]}</span><span className="note-sleep-time">{timeOf(entry.start_at)}〜{timeOf(entry.end_at)}</span></span></div>
+              <div className="note-sleep"><i className={`dot ${entry.kind}`} /><span className="note-sleep-detail"><span className="note-sleep-kind">{KIND_LABEL[entry.kind]}</span><span className="note-sleep-time">{timeOf(entry.start_at)}〜{timeOf(entry.end_at)}</span><span className="note-sleep-duration">{formatDuration(duration(entry))}</span></span></div>
+              {expanded && <div className="note-actions"><button type="button" className="icon-button" aria-label={`${label}を編集`} onClick={event => { event.currentTarget.focus(); onEdit(entry); }}><Icon name="pencil" size={17} /></button></div>}
             </header>
             <div className={`panel note-card ${expanded ? "expanded" : ""}`}>
-              <button type="button" className="note-content-toggle" aria-label={`${label}を${expanded ? "閉じる" : "全文表示"}`} aria-expanded={expanded} aria-controls={`note-body-${entry.id}`} onClick={event => { event.currentTarget.focus({ preventScroll: true }); setExpandedId(expanded ? null : entry.id); }}><span className="note-body" id={`note-body-${entry.id}`}>{entry.note}</span></button>
-              {expanded && <div className="note-actions"><button type="button" className="icon-button" aria-label={`${label}を編集`} onClick={event => { event.currentTarget.focus(); onEdit(entry); }}><Icon name="pencil" size={17} /></button></div>}
+              <button type="button" className="note-content-toggle" aria-label={`${label}を${expanded ? "閉じる" : "全文表示"}`} aria-expanded={expanded} aria-controls={`note-body-${entry.id}`} onClick={event => { event.currentTarget.focus({ preventScroll: true }); setExpandedId(expanded ? null : entry.id); }}><span className="note-body" id={`note-body-${entry.id}`}>{entry.note?.trimEnd()}</span></button>
             </div>
           </article>;
         })}
