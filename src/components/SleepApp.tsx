@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { getSupabase, configured, signIn } from "../lib/supabase";
+import { NoteLockProvider } from "./NoteLockProvider";
 import { CloudRepository, DEMO_USER, type Repository, dbError } from "../lib/repository";
 import { startDemo, DEMO_STORAGE } from "../lib/demo";
 import { readDraft, clearDraft, type Draft } from "../lib/draft";
@@ -17,7 +18,7 @@ import { DailyRecords } from "./DailyRecords";
 
 type View="day"|"calendar"|"analysis"|"notes"|"data";
 type Access="loading"|"unconfigured"|"signedOut"|"forbidden"|"error"|"ready";
-const NAV:{view:View;label:string;icon:IconName}[]=[{view:"day",label:"日別の記録",icon:"moon"},{view:"calendar",label:"カレンダー",icon:"calendar"},{view:"analysis",label:"分析",icon:"chart"},{view:"notes",label:"ノート",icon:"notebook"},{view:"data",label:"データ管理",icon:"settings"}];
+const NAV:{view:View;label:string;icon:IconName}[]=[{view:"day",label:"日別の記録",icon:"moon"},{view:"calendar",label:"カレンダー",icon:"calendar"},{view:"analysis",label:"分析",icon:"chart"},{view:"notes",label:"日記",icon:"notebook"},{view:"data",label:"データ管理",icon:"settings"}];
 
 export default function SleepApp() {
   const [access,setAccess]=useState<Access>("loading");
@@ -93,7 +94,7 @@ export default function SleepApp() {
   async function logout() {
     if(!window.confirm(demo?"体験モードを終了しますか？ 体験用の変更は消去されます。":"この端末からログアウトしますか？"))return;
     if(!demo){const sb=getSupabase();if(sb){const {error}=await sb.auth.signOut({scope:"local"});if(error){setError("ログアウトできませんでした。もう一度お試しください。");return;}}}
-    clearDraft(userId);if(demo)sessionStorage.removeItem(DEMO_STORAGE);
+    clearDraft(userId);if(demo){sessionStorage.removeItem(DEMO_STORAGE);sessionStorage.removeItem(`${DEMO_STORAGE}-lock-settings`);}
     demoRef.current=false;currentUser.current=null;setDemo(false);setRepository(null);setEntries([]);setPendingDraft(null);setEditor(null);setSession(null);setError("");setAccess(configured?"signedOut":"unconfigured");setAuthRefresh(n=>n+1);
   }
   function openEditor(entry?:SleepEntry) {
@@ -106,13 +107,13 @@ export default function SleepApp() {
   const today=dayOf(new Date());
   const totals=selected?summary(entries,selected):{records:[],minutes:0,byKind:{normal:0,nap:0,doze:0,other:0}};
   const name=demo?"体験モード":session?.user.user_metadata?.user_name??session?.user.user_metadata?.preferred_username??"マイアカウント";
-  return <div className="app-shell">
+  return <NoteLockProvider key={userId} repository={repository} onChanged={saved=>setEntries(previous=>previous.map(entry=>entry.id===saved.id?saved:entry))}><div className="app-shell">
     <aside className="sidebar"><a className="brand" href={`${process.env.NEXT_PUBLIC_BASE_PATH??""}/`} aria-label="Sleep Log ホーム"><span className="brand-mark"><Icon name="moon" size={24}/></span><span>sleep log<span className="brand-sub">睡眠記録</span></span></a><div className="sidebar-divider"/><nav aria-label="メインナビゲーション">{NAV.map(item=><button type="button" key={item.view} className={`nav-item ${view===item.view?"active":""}`} disabled={access!=="ready"} onClick={()=>setView(item.view)}><Icon name={item.icon}/>{item.label}{view===item.view&&<span className="nav-indicator"/>}</button>)}</nav>
 
     <div className="sidebar-bottom"><span className={`connection-dot ${access==="ready"&&!demo?"online":""}`}/>{demo?"サンプルデータで体験中":access==="ready"?"クラウドに接続中":"未接続"}</div></aside>
     <div className="workspace"><header className="topbar"><div className="mobile-brand"><span className="brand-mark"><Icon name="moon" size={20}/></span><span>sleep log</span></div><div className="header-actions"><div className="account"><span className="timezone">日本時間</span><span className="avatar">{demo?"S":String(name).slice(0,1).toUpperCase()}</span><span className="account-name">{name}</span></div>{access==="ready"&&<MobileMenu demo={demo} onData={()=>setView("data")} onLogout={()=>void logout()}/>}</div></header>
     <main id="main-content">
-    {access==="loading"?<div className="loading-screen" role="status"><Icon name="moon" size={36}/><p>記録をひらいています…</p></div>:access!=="ready"?<section className="welcome"><div className="welcome-art"><div className="orbit orbit-one"/><div className="orbit orbit-two"/><Icon name="moon" size={72}/><span className="art-star one">✦</span><span className="art-star two">✧</span></div><h1>睡眠記録</h1><p className="welcome-copy">睡眠の日時・種類・ノートを記録します。</p>
+    {access==="loading"?<div className="loading-screen" role="status"><Icon name="moon" size={36}/><p>記録をひらいています…</p></div>:access!=="ready"?<section className="welcome"><div className="welcome-art"><div className="orbit orbit-one"/><div className="orbit orbit-two"/><Icon name="moon" size={72}/><span className="art-star one">✦</span><span className="art-star two">✧</span></div><h1>睡眠記録</h1><p className="welcome-copy">睡眠の日時・種類・日記を記録します。</p>
     {access==="unconfigured"?<><div className="welcome-notice"><Icon name="info" size={18}/><span>クラウド保存は準備中です。<br/>サンプルデータで操作を確認できます。</span></div><button type="button" className="button primary large" onClick={enterDemo}><Icon name="spark"/>画面を体験する<Icon name="right" size={18}/></button></>:access==="forbidden"?<><div className="notice error" role="alert"><Icon name="info"/><p>このアカウントには利用許可がありません。本人用の設定を完了してから、もう一度確認してください。</p></div><div className="row gap-3 wrap"><button className="button primary" onClick={()=>{currentUser.current=null;setAuthRefresh(n=>n+1);}}>利用許可を再確認</button><button className="button secondary" onClick={logout}>ログアウト</button></div></>:<><button type="button" className="button primary large" onClick={login} disabled={authBusy}><Icon name="github"/>{authBusy?"ログインに移動中…":"GitHubでログイン"}</button>{access==="error"&&<button type="button" className="text-button" onClick={()=>{currentUser.current=null;setAuthRefresh(n=>n+1);}}>接続を再確認する</button>}<button type="button" className="text-button demo-link" onClick={enterDemo}>サンプルで体験する<Icon name="right" size={15}/></button></>}
     {error&&<div className="notice error" role="alert">{error}</div>}</section>:<>
       {demo&&<div className="demo-banner"><div><Icon name="spark" size={16}/><strong>体験モード</strong><span>サンプルの記録です。変更はこのタブ内だけに保存されます。</span></div><button type="button" onClick={logout}>体験を終了<Icon name="close" size={14}/></button></div>}
@@ -130,5 +131,5 @@ export default function SleepApp() {
     </main><footer className="app-footer"><span>sleep log</span><span>JST / UTC+9</span></footer></div>
     {access==="ready"&&<nav className="mobile-nav" aria-label="モバイルナビゲーション">{NAV.filter(item=>item.view!=="data").map(item=><button key={item.view} type="button" className={view===item.view?"active":""} onClick={()=>setView(item.view)}><Icon name={item.icon} size={21}/><span>{item.label}</span></button>)}<button type="button" className="mobile-add" onClick={()=>openEditor()}><Icon name="plus" size={23}/><span>追加</span></button></nav>}
     {editor&&repository&&<RecordForm day={selected} userId={userId} entry={editor.entry} draft={editor.draft} repository={repository} onClose={()=>setEditor(null)} onSaved={message=>{setEditor(null);setPendingDraft(null);setNotice(message);reload();}}/>}
-  </div>;
+  </div></NoteLockProvider>;
 }

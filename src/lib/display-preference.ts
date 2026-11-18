@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-// 表示設定だけを端末に保存する。睡眠記録やノート本文は含めない。
+// 表示設定だけを端末に保存する。睡眠記録や日記本文は含めない。
 export function useDisplayPreference<T extends string | boolean>(userId: string, name: string, fallback: T, valid: (value: unknown) => value is T) {
   const key = `sleep-log-display:${userId}:${name}`;
   const [value, setValue] = useState<T>(() => {

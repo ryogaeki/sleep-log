@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { validateLockSettings, type NoteLockSettings } from "./note-lock";
 import { parseBackup, makeBackup, planRestore, type Backup } from "./backup";
 import { AppError, fromJst, validateEntry, validateInput, sameContent, inputOnly, overlap, type SleepEntry, type SleepInput } from "./sleep";
 
@@ -11,6 +12,8 @@ export interface Repository {
   remove(id: string, revision: number): Promise<void>;
   export(): Promise<Backup>;
   restore(backup: Backup): Promise<RestoreResult>;
+  lockSettings(): Promise<NoteLockSettings | null>;
+  createLockSettings(settings: NoteLockSettings): Promise<void>;
 }
 export function dbError(error: { code?: string; message?: string }): AppError {
   if (error.code === "23P01") return new AppError("overlap", "時間帯が重なる記録があります。最新の記録を確認して、日時を修正してください。");
@@ -21,6 +24,16 @@ export function dbError(error: { code?: string; message?: string }): AppError {
 }
 export class CloudRepository implements Repository {
   constructor(private sb: SupabaseClient, private userId: string) {}
+  async lockSettings() {
+    const { data, error } = await this.sb.from("note_lock_settings").select("version,salt,verifier").eq("user_id", this.userId).maybeSingle();
+    if (error) throw new AppError("network", "日記のロック設定を取得できませんでした。接続と、日記ロック用の更新SQLの適用を確認してください。");
+    return data ? validateLockSettings(data) : null;
+  }
+  async createLockSettings(settings: NoteLockSettings) {
+    const { error } = await this.sb.from("note_lock_settings").insert({ ...validateLockSettings(settings), user_id: this.userId });
+    if (error?.code === "23505") throw new AppError("conflict", "別の画面でパスワードが設定されました。閉じてからもう一度お試しください。");
+    if (error) throw dbError(error);
+  }
   async all() {
     // 同じRLSを適用する既存のスナップショットRPCで、1000件超も欠けずに読む。
     const backup = await this.export();
@@ -89,7 +102,12 @@ export class CloudRepository implements Repository {
 export const DEMO_USER = "99999999-9999-4999-8999-000000000001";
 export class DemoRepository implements Repository {
   private entries: SleepEntry[];
-  constructor(initial: SleepEntry[], private persist: (entries: SleepEntry[]) => void = () => {}) { this.entries = structuredClone(initial); }
+  constructor(initial: SleepEntry[], private persist: (entries: SleepEntry[]) => void = () => {}, private settings: NoteLockSettings | null = null, private persistSettings: (settings: NoteLockSettings) => void = () => {}) { this.entries = structuredClone(initial); }
+  async lockSettings() { return this.settings ? structuredClone(this.settings) : null; }
+  async createLockSettings(settings: NoteLockSettings) {
+    if (this.settings) throw new AppError("conflict", "パスワードは設定済みです。");
+    const checked = validateLockSettings(settings); this.persistSettings(checked); this.settings = checked;
+  }
   private commit(next: SleepEntry[]) { this.persist(next); this.entries = next; }
   async all() { return structuredClone(this.entries); }
   async list(first: string, until: string) { return structuredClone(this.entries.filter(e => e.start_at < fromJst(until) && e.end_at > fromJst(first))); }

@@ -1,3 +1,4 @@
+import { validateLockSettings, type NoteLockSettings } from "./note-lock";
 import { dayOf, shiftDay, fromJst, validateEntry, type SleepEntry, type Kind } from "./sleep";
 import { DEMO_USER, DemoRepository } from "./repository";
 export const DEMO_STORAGE = "sleep-log-demo-v1";
@@ -27,5 +28,7 @@ export function startDemo(): DemoRepository {
       if (Array.isArray(parsed)) records = parsed.map(validateEntry);
     }
   } catch { try{sessionStorage.removeItem(DEMO_STORAGE);}catch{} }
-  return new DemoRepository(records, entries => {try{sessionStorage.setItem(DEMO_STORAGE,JSON.stringify(entries));}catch{/* 体験用の変更は現在の画面のメモリーに残す。 */}});
+  let settings: NoteLockSettings | null = null;
+  try { const text=sessionStorage.getItem(`${DEMO_STORAGE}-lock-settings`);if(text)settings=validateLockSettings(JSON.parse(text)); } catch {}
+  return new DemoRepository(records, entries => {try{sessionStorage.setItem(DEMO_STORAGE,JSON.stringify(entries));}catch{/* 体験用の変更は現在の画面のメモリーに残す。 */}}, settings, value => { sessionStorage.setItem(`${DEMO_STORAGE}-lock-settings`, JSON.stringify(value)); });
 }

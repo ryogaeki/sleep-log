@@ -4,9 +4,13 @@ import { AppError, KINDS, KIND_LABEL, dayOf, timeOf, fromJst, shiftDay, duration
 import { initialForm, draftKey, clearDraft, type FormValues, type Draft } from "../lib/draft";
 import type { Repository } from "../lib/repository";
 import { Icon } from "./Icon";
+import { useNoteLock } from "./NoteLockProvider";
 
 export function RecordForm({ day, userId, entry, draft, repository, onClose, onSaved }: { day: string; userId:string; entry?:SleepEntry; draft?:Draft; repository:Repository; onClose:()=>void; onSaved:(message:string)=>void }) {
   const [values,setValues] = useState<FormValues>(()=>draft?.values ?? initialForm(day,entry));
+  const privacy = useNoteLock();
+  const [checkingDraft,setCheckingDraft] = useState(Boolean(draft?.values.revision));
+  const noteHidden = checkingDraft || (Boolean(values.note_locked) && !privacy.unlocked);
   const [noteOpen,setNoteOpen] = useState(Boolean(values.note));
   const [dirty,setDirty] = useState(Boolean(draft));
   const [error,setError] = useState("");
@@ -20,6 +24,12 @@ export function RecordForm({ day, userId, entry, draft, repository, onClose, onS
   const saved = useRef(false);
   // DOMを外す前に閉じ、ブラウザーが元の入力元へフォーカスを戻せるようにする。
   useLayoutEffect(()=>{const element=dialog.current;if(element){if(element.open)element.close();element.showModal();}return()=>{element?.close();};},[]);
+  useEffect(()=>{
+    if (!draft?.values.revision) return;
+    let active=true;
+    repository.get(draft.values.id).then(current=>{if(active){setValues(previous=>({...previous,note_locked:Boolean(previous.note_locked || current?.note_locked)}));setCheckingDraft(false);}}).catch(()=>{if(active)setError("下書きの日記のロック状態を確認できませんでした。接続を確認して、このページを再読み込みしてください。");});
+    return()=>{active=false;};
+  },[draft,repository]);
   useEffect(()=>{if(Object.keys(fieldErrors).length)dialog.current?.querySelector<HTMLElement>("[aria-invalid=true]")?.focus();},[fieldErrors]);
   useEffect(()=>{
     if (!dirty || saved.current) return;
@@ -54,16 +64,16 @@ export function RecordForm({ day, userId, entry, draft, repository, onClose, onS
   }
   const moreDays=preview?Math.max(0,Math.ceil((Date.parse(preview.end_at)-Date.parse(fromJst(dayOf(preview.start_at))))/DAY)-3):0;
   async function save(event: FormEvent) {
-    event.preventDefault(); if(lock.current) return;
+    event.preventDefault(); if(lock.current || noteHidden) return;
     const missing:Record<string,string>={};
     if (!values.kind) missing.kind="睡眠の種類を選んでください。";
     for(const [key,label] of [["startDate","就寝日"],["startTime","就寝時刻"],["endDate","終了日"],["endTime","終了時刻"]]) if(!values[key as keyof FormValues]) missing[key]=`${label}を入力してください。`;
-    if([...values.note.trimEnd()].length>2000) missing.note="ノートは2,000文字以内にしてください。";
+    if([...values.note.trimEnd()].length>2000) missing.note="日記は2,000文字以内にしてください。";
     setFieldErrors(missing); setError(""); setErrorCode("");
     if(Object.keys(missing).length){ dialog.current?.querySelector<HTMLElement>("[aria-invalid=true]")?.focus(); return; }
     lock.current=true;setBusy(true);
     try {
-      const input=validateInput({id:values.id,start_at:fromJst(values.startDate,values.startTime),end_at:fromJst(values.endDate,values.endTime),kind:values.kind,record_timezone:"Asia/Tokyo",note:values.note || null});
+      const input=validateInput({id:values.id,start_at:fromJst(values.startDate,values.startTime),end_at:fromJst(values.endDate,values.endTime),kind:values.kind,record_timezone:"Asia/Tokyo",note:values.note || null,note_locked:Boolean(values.note_locked)});
       const current=await repository.list(dayOf(input.start_at),shiftDay(dayOf(input.end_at),1));
       const collision=current.find(e=>overlap(input,e));
       if(collision) {
@@ -98,16 +108,16 @@ export function RecordForm({ day, userId, entry, draft, repository, onClose, onS
           const isStart=side==="start";const dk=isStart?"startDate":"endDate",tk=isStart?"startTime":"endTime";
           return <div className="time-block" key={side}><div className="field-heading"><label htmlFor={`${side}-date`}>{isStart?"就寝日時":"起きた日時"} <span className="required">必須</span></label><button type="button" className="text-button" onClick={()=>{try{update({[dk]:shiftDay(values[dk],isStart?-1:1)});}catch{setError("日付を選択してください。");}}}>{isStart?"前日にする":"翌日にする"}</button></div><div className="datetime-row"><div><input id={`${side}-date`} type="date" value={values[dk]} onChange={e=>update({[dk]:e.target.value})} aria-label={isStart?"就寝日":"終了日"} aria-invalid={Boolean(fieldErrors[dk])}/>{fieldErrors[dk]&&<p className="field-error">{fieldErrors[dk]}</p>}</div><div><input id={`${side}-time`} type="time" step="60" value={values[tk]} onChange={e=>update({[tk]:e.target.value})} aria-label={isStart?"就寝時刻":"終了時刻"} aria-invalid={Boolean(fieldErrors[tk])}/>{fieldErrors[tk]&&<p className="field-error">{fieldErrors[tk]}</p>}</div></div><div className="time-tools">{!isStart&&<button type="button" className="now-button" onClick={()=>{const now=new Date();update({endDate:dayOf(now),endTime:timeOf(now)});}}><Icon name="clock" size={15}/>終了を今にする</button>}</div></div>;
         })}
-        <details className="note-field" open={noteOpen} onToggle={event=>setNoteOpen(event.currentTarget.open)}><summary>ノート <span>任意</span><Icon name="plus" size={17}/></summary><textarea aria-label="ノート" rows={3} value={values.note} onChange={e=>update({note:e.target.value})} onBlur={()=>{const note=values.note.trimEnd();if(note!==values.note)update({note});}} placeholder="場所、起床時の状態、その日の出来事など" aria-invalid={Boolean(fieldErrors.note)}/><div className="character-count">{[...values.note].length.toLocaleString()} / 2,000文字</div>{fieldErrors.note&&<p className="field-error">{fieldErrors.note}</p>}</details>
+        {noteHidden ? <div className="diary-form-locked"><Icon name="lock" size={25} /><p>{checkingDraft ? "日記のロック状態を確認しています…" : "この日記はロックされています"}</p>{!checkingDraft && <button className="button secondary" type="button" onClick={privacy.unlock}>日記のロックを解除</button>}</div> : <details className="note-field" open={noteOpen} onToggle={event=>setNoteOpen(event.currentTarget.open)}><summary>日記 <span>任意</span><Icon name="plus" size={17}/></summary><textarea aria-label="日記" rows={3} value={values.note} onChange={e=>update({note:e.target.value})} onBlur={()=>{const note=values.note.trimEnd();if(note!==values.note)update({note});}} placeholder="場所、起床時の状態、その日の出来事など" aria-invalid={Boolean(fieldErrors.note)}/><div className="character-count">{[...values.note].length.toLocaleString()} / 2,000文字</div>{fieldErrors.note&&<p className="field-error">{fieldErrors.note}</p>}</details>}
       </fieldset>
       {preview&&<div className="duration-preview"><div><span>記録する睡眠時間</span><strong>{formatDuration(duration(preview))}</strong></div><p>{allocations.map(a=>`${dateLabel(a.day)}に${formatDuration(a.minutes)}`).join("、")}{moreDays>0?`、ほか${moreDays}日`:""}</p></div>}
       {error&&<div className="notice error" role="alert"><Icon name="info"/><div>{error}<small>入力はこの画面に残っています。</small>{errorCode==="conflict"&&<button type="button" className="text-button" disabled={busy} onClick={getLatest}>最新の記録を確認</button>}</div></div>}
-      {latest!==undefined&&<div className="latest-record"><strong>保存先の最新の記録</strong>{latest?<><p>{KIND_LABEL[latest.kind]} · {dateLabel(dayOf(latest.start_at))} {timeOf(latest.start_at)}〜{dateLabel(dayOf(latest.end_at))} {timeOf(latest.end_at)}</p><p className="note-text">{latest.note}</p><button type="button" className="text-button" onClick={()=>{if(!window.confirm("現在の入力を破棄し、最新の内容に切り替えますか？"))return;setValues(initialForm(day,latest));setDirty(false);clearDraft(userId);setLatest(undefined);setError("");}}>最新の内容に切り替える</button></>:<p>このIDの記録は保存されていません。現在の入力は変更していません。</p>}</div>}
+      {latest!==undefined&&<div className="latest-record"><strong>保存先の最新の記録</strong>{latest?<><p>{KIND_LABEL[latest.kind]} · {dateLabel(dayOf(latest.start_at))} {timeOf(latest.start_at)}〜{dateLabel(dayOf(latest.end_at))} {timeOf(latest.end_at)}</p><p className="note-text">{latest.note_locked && !privacy.unlocked ? "ロックされた日記" : latest.note}</p><button type="button" className="text-button" onClick={()=>{if(latest.note_locked&&!privacy.unlocked){privacy.unlock();return;}if(!window.confirm("現在の入力を破棄し、最新の内容に切り替えますか？"))return;setValues(initialForm(day,latest));setDirty(false);clearDraft(userId);setLatest(undefined);setError("");}}>最新の内容に切り替える</button></>:<p>このIDの記録は保存されていません。現在の入力は変更していません。</p>}</div>}
       {draftWarning&&<p className="field-error">一時保存を利用できません。この画面を閉じる前に記録を保存してください。</p>}
       <p className="form-footnote">日時はすべて日本時間です。</p>
-      {values.revision&&entry&&<button type="button" className="delete-button" disabled={busy} onClick={remove}><Icon name="trash" size={17}/>この記録を削除する</button>}
+      {values.revision&&entry&&<button type="button" className="delete-button" disabled={busy || noteHidden} onClick={remove}><Icon name="trash" size={17}/>この記録を削除する</button>}
       </div>
-      <footer className="dialog-footer"><button type="submit" disabled={busy} className="button primary save-button">{busy?<><Icon name="refresh" className="spinning"/>保存先を確認中…</>:<><Icon name="check"/>保存する</>}</button></footer>
+      <footer className="dialog-footer"><button type="submit" disabled={busy || noteHidden} className="button primary save-button">{busy?<><Icon name="refresh" className="spinning"/>保存先を確認中…</>:<><Icon name="check"/>保存する</>}</button></footer>
     </form>
   </dialog>;
 }

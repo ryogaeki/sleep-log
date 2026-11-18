@@ -24,7 +24,7 @@ test("30時間の睡眠と0時終了を扱い、0時間のカードを出さな�
   assert.equal(summary([sleep],"2026-10-18").records.length,0);
   assert.doesNotThrow(()=>validateInput(sleep,now));
 });
-test("ノートは末尾の空白・改行だけを削り、先頭と本文途中の改行を保持する",()=>{
+test("日記は末尾の空白・改行だけを削り、先頭と本文途中の改行を保持する",()=>{
   const raw=entry(fromJst("2026-10-17","02:00"),fromJst("2026-10-17","08:00"));
   const note="  先頭の空白\n\n途中の改行\n  \n\t";
   assert.equal(validateInput({...raw,note},now).note,"  先頭の空白\n\n途中の改行");
@@ -58,7 +58,7 @@ test("不正日付、未来、終了以前、秒、長すぎるメモを拒否�
   assert.throws(()=>validateInput({...valid,note:"字".repeat(2001)},now));
   assert.doesNotThrow(()=>validateInput({...valid,note:"🌙".repeat(2000)},now));
 });
-test("廃止した属性を読み捨て、種類・日時・ノートと入力オブジェクトを保持する",()=>{
+test("廃止した属性を読み捨て、種類・日時・日記と入力オブジェクトを保持する",()=>{
   const raw=entry("2026-10-17T02:00:00+09:00","2026-10-17T08:00:00+09:00");
   const parsed=validateInput({...raw,note:"以前の本文",intention:"unintentional",start_accuracy:"estimated",end_accuracy:"exact"},now);
   for (const key of ["intention","start_accuracy","end_accuracy"]) assert.equal(key in parsed,false);

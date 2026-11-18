@@ -153,20 +153,20 @@ test("記録がない年間・全期間は架空の日付や平均を作らな�
     assert.equal(data.average, null); assert.equal(data.elapsedDays, 0); assert.equal(data.shares.normal, null);
   }
 });
-test("全件取得と複数年の集計は1000件を超えても欠けず、更新番号とノートを保持する", async () => {
+test("全件取得と複数年の集計は1000件を超えても欠けず、更新番号と日記を保持する", async () => {
   const entries = Array.from({ length: 1005 }, (_, index) => {
     const day = shiftDay("2020-01-01", index);
-    return { ...entry(index + 1, `${day} 02:00`, `${day} 03:00`), note: index === 0 ? "以前のノート" : null, revision: 3 };
+    return { ...entry(index + 1, `${day} 02:00`, `${day} 03:00`), note: index === 0 ? "以前の日記" : null, revision: 3 };
   });
   const client = { rpc: async (name: string) => { assert.equal(name, "export_sleep_backup"); return { data: makeBackup(entries), error: null }; } } as unknown as SupabaseClient;
   const cloud = await new CloudRepository(client, entries[0].user_id).all();
-  assert.equal(cloud.length, 1005); assert.equal(cloud[0].note, "以前のノート"); assert.equal(cloud[0].revision, 3);
+  assert.equal(cloud.length, 1005); assert.equal(cloud[0].note, "以前の日記"); assert.equal(cloud[0].revision, 3);
   assert.equal(cloud[0].user_id, entries[0].user_id);
   const data = analyze(cloud, periodRange("2026-11-10", "all", cloud), "2026-11-10");
   assert.equal(data.minutes, 1005 * 60); assert.equal(data.recordedDays, 1005); assert.equal(data.average, 60);
   const demo = new DemoRepository(entries);
   const snapshot = await demo.all(); snapshot[0].note = "読み取った配列だけの変更";
-  assert.equal((await demo.all())[0].note, "以前のノート");
+  assert.equal((await demo.all())[0].note, "以前の日記");
 });
 test("全件取得でもSupabase側の利用許可エラーを握りつぶさない", async () => {
   const client = { rpc: async () => ({ data: null, error: { code: "42501" } }) } as unknown as SupabaseClient;

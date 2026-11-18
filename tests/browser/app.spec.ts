@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
+import { createLockSettings } from "../../src/lib/note-lock";
 async function enter(page:Page){await page.clock.install({time:new Date("2026-10-18T12:00:00Z")});await page.goto("./");await page.getByRole("button",{name:"画面を体験する",exact:true}).click();await expect(page.locator(".record-card")).toHaveCount(3);}
 async function menu(page:Page,label:string){
   const button=page.getByRole("button",{name:label,exact:true});
@@ -26,7 +27,7 @@ test("日付をまたぐ記録を追加・編集・削除し、両日へ配分�
   await expect(page.locator(".summary-total")).toHaveText(/1時間0分/);
   await chooseDay(page,"2026-10-11");await expect(page.locator(".summary-total")).toHaveText(/7時間0分/);
   await expect(page.locator(".record-card")).toHaveCount(1);await page.locator(".record-main").click();
-  await form.locator("summary").click();await form.getByLabel("ノート",{exact:true}).fill("日付またぎをあとから記録");
+  await form.locator("summary").click();await form.getByLabel("日記",{exact:true}).fill("日付またぎをあとから記録");
   await form.getByRole("button",{name:"保存する",exact:true}).click();await expect(page.locator(".record-note")).toHaveText("日付またぎをあとから記録");
   await page.locator(".record-main").click();page.once("dialog",dialog=>dialog.accept());
   await form.getByRole("button",{name:"この記録を削除する",exact:true}).click();await expect(form).not.toBeVisible();
@@ -150,34 +151,34 @@ async function enterHistory(page:Page){
   await page.clock.install({time:new Date("2026-10-18T12:00:00Z")});
   await page.addInitScript(()=>{
     const entries=[
-      {start_at:"2024-05-17T17:00:00.000Z",end_at:"2024-05-17T23:00:00.000Z",note:"昔のノート\n二行目の内容"},
-      {start_at:"2025-12-31T14:00:00.000Z",end_at:"2025-12-31T17:00:00.000Z",note:"年越しのノート"},
+      {start_at:"2024-05-17T17:00:00.000Z",end_at:"2024-05-17T23:00:00.000Z",note:"昔の日記\n二行目の内容"},
+      {start_at:"2025-12-31T14:00:00.000Z",end_at:"2025-12-31T17:00:00.000Z",note:"年越しの日記"},
       {start_at:"2026-02-09T18:00:00.000Z",end_at:"2026-02-09T23:00:00.000Z",note:"  "},
-      {start_at:"2026-10-16T17:00:00.000Z",end_at:"2026-10-16T23:00:00.000Z",note:"最近のノート"},
+      {start_at:"2026-10-16T17:00:00.000Z",end_at:"2026-10-16T23:00:00.000Z",note:"最近の日記"},
     ].map((item,index)=>({...item,id:`aaaaaaaa-aaaa-4aaa-8aaa-${String(index+1).padStart(12,"0")}`,user_id:"99999999-9999-4999-8999-000000000001",kind:"normal",record_timezone:"Asia/Tokyo",created_at:"2026-01-01T00:00:00Z",updated_at:"2026-01-01T00:00:00Z",revision:1}));
     sessionStorage.setItem("sleep-log-demo-v1",JSON.stringify(entries));
   });
   await page.goto("./");await page.getByRole("button",{name:"画面を体験する",exact:true}).click();
 }
 
-test("ノートに全期間の内容を新しい順で表示し、検索・編集・空欄への変更を反映する",async({page},info)=>{
-  await enterHistory(page);await menu(page,"ノート");
+test("日記に全期間の内容を新しい順で表示し、検索・編集・空欄への変更を反映する",async({page},info)=>{
+  await enterHistory(page);await menu(page,"日記");
   await expect(page.locator(".note-card")).toHaveCount(3);
-  await expect(page.locator(".note-body").first()).toHaveText("最近のノート");
-  await expect(page.locator(".note-body").last()).toHaveText("昔のノート\n二行目の内容");
-  await page.getByLabel("ノートを検索").fill("昔");await expect(page.locator(".note-card")).toHaveCount(1);
-  await page.getByRole("button",{name:"2024-05-18 通常睡眠のノートを全文表示"}).click();
-  await page.getByRole("button",{name:"2024-05-18 通常睡眠のノートを編集"}).click();
+  await expect(page.locator(".note-body").first()).toHaveText("最近の日記");
+  await expect(page.locator(".note-body").last()).toHaveText("昔の日記\n二行目の内容");
+  await page.getByLabel("日記を検索").fill("昔");await expect(page.locator(".note-card")).toHaveCount(1);
+  await page.getByRole("button",{name:"2024-05-18 通常睡眠の日記を全文表示"}).click();
+  await page.getByRole("button",{name:"2024-05-18 通常睡眠の日記を編集"}).click();
   const form=page.getByRole("dialog");await expect(form.getByLabel("就寝日",{exact:true})).toHaveValue("2024-05-18");
-  await form.getByLabel("ノート",{exact:true}).fill("更新した昔のノート\n改行も保持");
+  await form.getByLabel("日記",{exact:true}).fill("更新した昔の日記\n改行も保持");
   await form.getByRole("button",{name:"保存する",exact:true}).click();await expect(form).not.toBeVisible();
-  await expect(page.locator(".note-body")).toHaveText("更新した昔のノート\n改行も保持");
-  await page.getByLabel("ノートを検索").fill("");await expect(page.locator(".note-card")).toHaveCount(3);
+  await expect(page.locator(".note-body")).toHaveText("更新した昔の日記\n改行も保持");
+  await page.getByLabel("日記を検索").fill("");await expect(page.locator(".note-card")).toHaveCount(3);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
   await page.screenshot({path:`/tmp/sleep-log-notes-${info.project.name}.png`,fullPage:true});
-  await page.getByRole("button",{name:"2024-05-18 通常睡眠のノートを全文表示"}).click();
-  await page.getByRole("button",{name:"2024-05-18 通常睡眠のノートを編集"}).click();
-  await form.getByLabel("ノート",{exact:true}).fill("");await form.getByRole("button",{name:"保存する",exact:true}).click();
+  await page.getByRole("button",{name:"2024-05-18 通常睡眠の日記を全文表示"}).click();
+  await page.getByRole("button",{name:"2024-05-18 通常睡眠の日記を編集"}).click();
+  await form.getByLabel("日記",{exact:true}).fill("");await form.getByRole("button",{name:"保存する",exact:true}).click();
   await expect(form).not.toBeVisible();await expect(page.locator(".note-card")).toHaveCount(2);
 });
 
@@ -200,7 +201,7 @@ test("スマホのデータ管理を上部メニューから開き、キャッ�
   await enter(page);
   if(info.project.name==="mobile"){
     await expect(page.getByRole("navigation",{name:"モバイルナビゲーション"}).getByRole("button",{name:"データ管理",exact:true})).toHaveCount(0);
-    await expect(page.getByRole("navigation",{name:"モバイルナビゲーション"}).getByRole("button",{name:"ノート",exact:true})).toBeVisible();
+    await expect(page.getByRole("navigation",{name:"モバイルナビゲーション"}).getByRole("button",{name:"日記",exact:true})).toBeVisible();
     await page.getByLabel("メニュー",{exact:true}).click();await expect(page.locator(".mobile-menu")).toHaveAttribute("open","");
     await page.keyboard.press("Escape");await expect(page.locator(".mobile-menu")).not.toHaveAttribute("open","");
     await page.getByLabel("メニュー",{exact:true}).click();
@@ -220,15 +221,15 @@ test("分析の週間・月間・年間・全期間を画面移動と再読み�
   await enter(page);await menu(page,"分析");
   for(const label of ["月間","年間","全期間","週間"]){
     await page.getByRole("button",{name:label,exact:true}).click();
-    await menu(page,"ノート");await menu(page,"分析");
+    await menu(page,"日記");await menu(page,"分析");
     await expect(page.getByRole("button",{name:label,exact:true})).toHaveAttribute("aria-pressed","true");
     await page.reload();await page.getByRole("button",{name:"画面を体験する",exact:true}).click();await menu(page,"分析");
     await expect(page.getByRole("button",{name:label,exact:true})).toHaveAttribute("aria-pressed","true");
   }
 });
 
-test("ノートの改行を4行プレビューで詰め、1件だけ全文を展開して編集できる",async({page},info)=>{
-  const longNote="一行目の振り返り。\n\n二行目には、その日の出来事を書いています。\n"+"長いノートの文章です。".repeat(35)+"\n最後の行も編集画面で読めます。";
+test("日記の改行を4行プレビューで詰め、1件だけ全文を展開して編集できる",async({page},info)=>{
+  const longNote="一行目の振り返り。\n\n二行目には、その日の出来事を書いています。\n"+"長い日記の文章です。".repeat(35)+"\n最後の行も編集画面で読めます。";
   await page.clock.install({time:new Date("2026-10-18T12:00:00Z")});
   await page.addInitScript(({longNote})=>{
     const entries=[
@@ -238,8 +239,8 @@ test("ノートの改行を4行プレビューで詰め、1件だけ全文を展
     ].map((entry,index)=>({...entry,id:`aaaaaaaa-aaaa-4aaa-8aaa-${String(index+1).padStart(12,"0")}`,user_id:"99999999-9999-4999-8999-000000000001",record_timezone:"Asia/Tokyo",created_at:"2026-01-01T00:00:00Z",updated_at:"2026-01-01T00:00:00Z",revision:1}));
     sessionStorage.setItem("sleep-log-demo-v1",JSON.stringify(entries));
   },{longNote});
-  await page.goto("./");await page.getByRole("button",{name:"画面を体験する",exact:true}).click();await menu(page,"ノート");
-  const toggle=page.getByRole("switch",{name:"ノートの日付を1日前に表示"});
+  await page.goto("./");await page.getByRole("button",{name:"画面を体験する",exact:true}).click();await menu(page,"日記");
+  const toggle=page.getByRole("switch",{name:"日記の日付を1日前に表示"});
   await expect(toggle).toBeChecked();await expect(page.locator(".note-day")).toHaveCount(2);
   await expect(page.locator(".note-day-heading time").first()).toHaveAttribute("datetime","2025-12-31");
   await expect(page.locator(".note-day").first().locator(".note-card")).toHaveCount(2);
@@ -253,9 +254,9 @@ test("ノートの改行を4行プレビューで詰め、1件だけ全文を展
     const date=el.querySelector("time")!.getBoundingClientRect(),dot=el.querySelector(".dot")!.getBoundingClientRect();
     return parseFloat(getComputedStyle(day).fontSize)>parseFloat(getComputedStyle(month).fontSize)*2 && dot.left>=date.right && dot.left-date.right<24;
   })).toBe(true);
-  const card=page.getByRole("button",{name:"2026-01-01 通常睡眠のノートを全文表示",exact:true});
+  const card=page.getByRole("button",{name:"2026-01-01 通常睡眠の日記を全文表示",exact:true});
   const body=page.locator("#note-body-aaaaaaaa-aaaa-4aaa-8aaa-000000000001");
-  const edit=page.getByRole("button",{name:"2026-01-01 通常睡眠のノートを編集",exact:true});
+  const edit=page.getByRole("button",{name:"2026-01-01 通常睡眠の日記を編集",exact:true});
   await expect(edit).toHaveCount(0);
   expect(await body.evaluate(el=>{
     const style=getComputedStyle(el);return style.whiteSpace==="normal" && style.webkitLineClamp==="4" && el.clientHeight<el.scrollHeight && el.clientHeight<=parseFloat(style.lineHeight)*4+1;
@@ -269,30 +270,30 @@ test("ノートの改行を4行プレビューで詰め、1件だけ全文を展
   await expect(edit).toBeVisible();
   await expect(page.locator(".note-card .note-actions")).toHaveCount(0);
   await page.screenshot({path:`/tmp/sleep-log-expanded-note-${info.project.name}.png`,fullPage:true});
-  await page.getByRole("button",{name:"2026-01-01 昼寝のノートを全文表示",exact:true}).click();
+  await page.getByRole("button",{name:"2026-01-01 昼寝の日記を全文表示",exact:true}).click();
   await expect(page.locator(".note-card.expanded")).toHaveCount(1);await expect(edit).toHaveCount(0);
   await expect(body).toHaveCSS("white-space","normal");
   await card.click();await edit.click();const form=page.getByRole("dialog");
   await expect(form.getByLabel("就寝日",{exact:true})).toHaveValue("2026-01-01");
-  await expect(form.getByLabel("ノート",{exact:true})).toHaveValue(longNote);
+  await expect(form.getByLabel("日記",{exact:true})).toHaveValue(longNote);
   await form.getByRole("button",{name:"閉じる",exact:true}).click();
   await expect(edit).toBeFocused();
   await expect(page.getByRole("link",{name:"本文へ移動",exact:true})).not.toBeInViewport();
-  await page.getByRole("button",{name:"2026-01-01 通常睡眠のノートを閉じる",exact:true}).click();
+  await page.getByRole("button",{name:"2026-01-01 通常睡眠の日記を閉じる",exact:true}).click();
   await expect(page.locator(".note-card.expanded")).toHaveCount(0);
   await toggle.uncheck();await expect(page.locator(".note-day-heading time").first()).toHaveAttribute("datetime","2026-01-01");
-  await page.getByLabel("ノートを検索").fill("2026-01-01");await expect(page.locator(".note-card")).toHaveCount(2);
-  await page.getByLabel("ノートを検索").fill("");
+  await page.getByLabel("日記を検索").fill("2026-01-01");await expect(page.locator(".note-card")).toHaveCount(2);
+  await page.getByLabel("日記を検索").fill("");
   await menu(page,"分析");await page.getByRole("button",{name:"全期間",exact:true}).click();
   await expect(page.locator('[aria-label="期間の合計睡眠時間"]')).toContainText("13時間");
-  await menu(page,"ノート");await expect(toggle).not.toBeChecked();
-  await page.reload();await page.getByRole("button",{name:"画面を体験する",exact:true}).click();await menu(page,"ノート");
+  await menu(page,"日記");await expect(toggle).not.toBeChecked();
+  await page.reload();await page.getByRole("button",{name:"画面を体験する",exact:true}).click();await menu(page,"日記");
   await expect(toggle).not.toBeChecked();await expect(page.locator(".note-day-heading time").first()).toHaveAttribute("datetime","2026-01-01");
-  await toggle.check();await page.getByLabel("ノートを検索").fill("2025-12-31");await expect(page.locator(".note-card")).toHaveCount(2);
+  await toggle.check();await page.getByLabel("日記を検索").fill("2025-12-31");await expect(page.locator(".note-card")).toHaveCount(2);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
 });
 
-test("日別のノートだけを展開し、末尾の空行を除いて保存する。日時入力は狭い幅にも収まる",async({page},info)=>{
+test("日別の日記だけを展開し、末尾の空行を除いて保存する。日時入力は狭い幅にも収まる",async({page},info)=>{
   await enter(page);
   await expect(page.getByText("合計は日本時間の0:00で区切って計算しています。",{exact:true})).toHaveCount(0);
   await expect(page.locator(".app-footer")).toHaveCSS("border-top-width","0px");
@@ -314,13 +315,13 @@ test("日別のノートだけを展開し、末尾の空行を除いて保存�
     expect(await form.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
   }
   await page.screenshot({path:`/tmp/sleep-log-time-input-${info.project.name}.png`,fullPage:false});
-  const note=form.getByLabel("ノート",{exact:true});
+  const note=form.getByLabel("日記",{exact:true});
   await note.fill("  先頭はそのまま\n\n途中の改行も残す\n  \n");
   await form.getByRole("button",{name:"保存する",exact:true}).click();await expect(form).not.toBeVisible();
   await page.locator(".record-note-toggle").first().click();
   expect(await page.locator(".record-note").first().textContent()).toBe("  先頭はそのまま\n\n途中の改行も残す");
-  await menu(page,"ノート");
-  await page.getByRole("button",{name:"2026-10-17 通常睡眠のノートを全文表示"}).click();
+  await menu(page,"日記");
+  await page.getByRole("button",{name:"2026-10-17 通常睡眠の日記を全文表示"}).click();
   expect(await page.locator(".note-card.expanded .note-body").textContent()).toBe("  先頭はそのまま\n\n途中の改行も残す");
 });
 
@@ -357,10 +358,10 @@ test("カレンダーの円を12時間で1周、超過を2周目として表示�
   await page.screenshot({path:`/tmp/sleep-log-calendar-rings-${info.project.name}.png`,fullPage:true});
 });
 
-test("日別のノート本文を押すと長い文章も改行付きで全文になり、別の本文を押すと元に戻る",async({page},info)=>{
+test("日別の日記本文を押すと長い文章も改行付きで全文になり、別の本文を押すと元に戻る",async({page},info)=>{
   await enter(page);await page.locator(".record-main").first().click();
-  const text="最初の行。\n\n"+"長いノートの内容を最後まで読む。".repeat(35)+"\n最後の行。";
-  const form=page.getByRole("dialog");await form.getByLabel("ノート",{exact:true}).fill(text);
+  const text="最初の行。\n\n"+"長い日記の内容を最後まで読む。".repeat(35)+"\n最後の行。";
+  const form=page.getByRole("dialog");await form.getByLabel("日記",{exact:true}).fill(text);
   await form.getByRole("button",{name:"保存する",exact:true}).click();await expect(form).not.toBeVisible();
   const first=page.locator(".record-note-toggle").first(),body=first.locator(".record-note");
   const collapsed=await body.evaluate(el=>el.getBoundingClientRect().height);
@@ -412,4 +413,84 @@ test("平均を大きく表示し、就寝・起床の回数と種類フィル�
   await panel.screenshot({path:`/tmp/sleep-log-event-times-${info.project.name}.png`});
   await page.locator(".time-trends-panel").screenshot({path:`/tmp/sleep-log-time-trends-${info.project.name}.png`});
   await page.screenshot({path:`/tmp/sleep-log-refined-analysis-${info.project.name}.png`,fullPage:true});
+});
+
+test("日記ごとの表示ロックを設定し、共通パスワードでまとめて解除・再ロックする。バックアップは本文を保つ",async({page},info)=>{
+  test.setTimeout(60_000);
+  await enter(page);await menu(page,"日記");
+  const password="diary-test-password";
+  const normal="2026-10-17 通常睡眠の日記",nap="2026-10-17 昼寝の日記";
+  const dialog=()=>page.locator(".diary-lock-dialog");
+  const unlock=async()=>{await dialog().getByLabel("日記のパスワード",{exact:true}).fill(password);await dialog().getByRole("button",{name:"解除する",exact:true}).click();await expect(dialog()).toHaveCount(0);};
+  await page.getByRole("button",{name:`${normal}を全文表示`,exact:true}).click();
+  await page.getByRole("button",{name:`${normal}のロックを設定`,exact:true}).click();
+  await expect(dialog().getByRole("heading")).toHaveText("日記のパスワードを設定");
+  await dialog().getByLabel("日記のパスワード",{exact:true}).fill(password);
+  await dialog().getByLabel("確認用パスワード",{exact:true}).fill("different-password");
+  await dialog().getByRole("button",{name:"設定してロックする",exact:true}).click();
+  await expect(dialog().getByRole("alert")).toContainText("一致しません");
+  await dialog().getByLabel("確認用パスワード",{exact:true}).fill(password);
+  await dialog().getByRole("button",{name:"設定してロックする",exact:true}).click();
+  await expect(dialog()).toHaveCount(0);await expect(page.locator(".diary-locked")).toHaveCount(1);
+  await page.clock.runFor(1);
+  await expect(page.getByRole("button",{name:`${normal}のロックを解除`,exact:true})).toBeFocused();
+  await expect(page.locator(".notes-page")).not.toContainText("夜の睡眠。目覚ましで起床。");
+  await page.getByLabel("日記を検索").fill("目覚まし");await expect(page.locator(".note-card")).toHaveCount(0);
+  await page.getByLabel("日記を検索").fill("");
+  await page.getByRole("button",{name:`${nap}を全文表示`,exact:true}).click();
+  await page.getByRole("button",{name:`${nap}のロックを設定`,exact:true}).click();
+  await dialog().getByLabel("日記のパスワード",{exact:true}).fill(password);
+  await dialog().getByRole("button",{name:"ロックする",exact:true}).click();
+  await expect(dialog()).toHaveCount(0);await expect(page.locator(".diary-locked")).toHaveCount(2);
+  await page.screenshot({path:`/tmp/sleep-log-locked-diary-${info.project.name}.png`,fullPage:true});
+  await page.getByRole("button",{name:`${normal}のロックを解除`,exact:true}).click();
+  await dialog().getByLabel("日記のパスワード",{exact:true}).fill("wrong-password");
+  await dialog().getByRole("button",{name:"解除する",exact:true}).click();
+  await expect(dialog().getByRole("alert")).toContainText("違います");await expect(page.locator(".diary-locked")).toHaveCount(2);
+  await unlock();await expect(page.locator(".diary-locked")).toHaveCount(0);
+  await expect(page.locator(".notes-page")).toContainText("夜の睡眠。目覚ましで起床。");
+  await expect(page.locator(".notes-page")).toContainText("授業のあとに少し昼寝。");
+  await menu(page,"日別の記録");await page.locator(".record-main").first().click();
+  const form=page.locator(".record-dialog");await expect(form.getByLabel("日記",{exact:true})).toHaveValue("夜の睡眠。目覚ましで起床。");
+  await page.evaluate(()=>{Object.defineProperty(document,"hidden",{configurable:true,get:()=>true});document.dispatchEvent(new Event("visibilitychange"));Object.defineProperty(document,"hidden",{configurable:true,get:()=>false});});
+  await expect(form.locator(".diary-form-locked")).toBeVisible();await expect(form.getByLabel("日記",{exact:true})).toHaveCount(0);
+  await expect(form.getByRole("button",{name:"保存する",exact:true})).toBeDisabled();
+  await form.getByRole("button",{name:"日記のロックを解除",exact:true}).click();await unlock();
+  await form.getByLabel("日記",{exact:true}).fill("更新した日記の本文");
+  await form.getByRole("button",{name:"保存する",exact:true}).click();await expect(form).not.toBeVisible();
+  await menu(page,"データ管理");const downloading=page.waitForEvent("download");
+  await page.getByRole("button",{name:"バックアップを書き出す",exact:true}).click();
+  const backup=JSON.parse(await readFile((await(await downloading).path())!,"utf8"));
+  expect(backup.entries.find((entry:{id:string})=>entry.id.endsWith("000000000001"))).toMatchObject({note:"更新した日記の本文",note_locked:true});
+  expect(JSON.stringify(backup)).not.toContain(password);expect(JSON.stringify(backup)).not.toContain('"verifier"');
+  await page.reload();await page.getByRole("button",{name:"画面を体験する",exact:true}).click();await menu(page,"日記");
+  await expect(page.locator(".diary-locked")).toHaveCount(2);await expect(page.locator(".notes-page")).not.toContainText("更新した日記の本文");
+  await page.getByRole("button",{name:`${normal}のロックを解除`,exact:true}).click();await unlock();
+  await page.getByRole("button",{name:`${normal}のロックを外す`,exact:true}).click();
+  await page.getByRole("button",{name:"日記を再ロック",exact:true}).click();
+  await expect(page.locator(".diary-locked")).toHaveCount(1);await expect(page.locator(".notes-page")).toContainText("更新した日記の本文");
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(page.viewportSize()!.width);
+});
+
+
+test("ロック前の古い下書きも保存先を確認して本文を隠し、解除後にだけ再開する",async({page})=>{
+  const settings=await createLockSettings("diary-test-password");
+  await page.clock.install({time:new Date("2026-10-18T12:00:00Z")});
+  await page.addInitScript(({settings})=>{
+    const user="99999999-9999-4999-8999-000000000001",id="aaaaaaaa-aaaa-4aaa-8aaa-000000000001";
+    const entry={id,user_id:user,start_at:"2026-10-17T02:00:00+09:00",end_at:"2026-10-17T08:00:00+09:00",kind:"normal",record_timezone:"Asia/Tokyo",note:"ロック済みの保存本文",note_locked:true,created_at:"2026-10-17T08:00:00+09:00",updated_at:"2026-10-17T08:00:00+09:00",revision:2};
+    sessionStorage.setItem("sleep-log-demo-v1",JSON.stringify([entry]));
+    sessionStorage.setItem("sleep-log-demo-v1-lock-settings",JSON.stringify(settings));
+    sessionStorage.setItem(`sleep-log-draft:${user}`,JSON.stringify({userId:user,expiresAt:Date.now()+86400000,values:{id,revision:1,kind:"normal",startDate:"2026-10-17",startTime:"02:00",endDate:"2026-10-17",endTime:"08:00",note:"ロック前に書きかけだった本文",note_locked:false}}));
+  },{settings});
+  await page.goto("./");await page.getByRole("button",{name:"画面を体験する",exact:true}).click();
+  await page.getByRole("button",{name:"入力を再開する",exact:true}).click();
+  const form=page.locator(".record-dialog");
+  await expect(form.getByLabel("日記",{exact:true})).toHaveCount(0);
+  await expect(form).not.toContainText("ロック前に書きかけだった本文");
+  await form.getByRole("button",{name:"日記のロックを解除",exact:true}).click();
+  const unlock=page.locator(".diary-lock-dialog");await unlock.getByLabel("日記のパスワード",{exact:true}).fill("diary-test-password");
+  await unlock.getByRole("button",{name:"解除する",exact:true}).click();
+  await expect(form.getByLabel("日記",{exact:true})).toHaveValue("ロック前に書きかけだった本文");
+  await form.getByRole("button",{name:"保存する",exact:true}).click();await expect(form.getByRole("alert")).toContainText("別の画面で変更");
 });

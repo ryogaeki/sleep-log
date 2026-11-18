@@ -18,7 +18,7 @@
 | `end_at` | timestamptz | 終了日時。必須、有限の日時、分単位、開始より後 |
 | `kind` | text | `normal` / `nap` / `doze` / `other` のいずれか。必須 |
 | `record_timezone` | text | 初期版は `Asia/Tokyo` 固定。時刻入力の解釈を保持する |
-| `note` | text、NULL可 | ノート。末尾の空白・改行を除去し、空ならNULL。本文途中の改行は可、2,000文字まで。HTMLとして実行しない |
+| `note` | text、NULL可 | 日記。末尾の空白・改行を除去し、空ならNULL。本文途中の改行は可、2,000文字まで。HTMLとして実行しない |
 | `created_at` | timestamptz | DBが設定する作成日時。通常の編集では変更不可 |
 | `updated_at` | timestamptz | DBが設定する最終更新日時 |
 | `revision` | integer | DBが管理する更新番号。新規は1、更新のたびに1増やす |
@@ -107,7 +107,7 @@
 
 JSON形式の識別子は `sleep-log-backup`、形式の版は `1`。ファイル名は日本時間の出力日時を含め、例として `sleep-log-backup-20261018-203000.json` とする。
 
-ファイル全体に形式名、版、出力日時（オフセット付きISO 8601）、集計タイムゾーン、記録件数、記録配列を含める。各記録にはID、開始・終了、種類、入力タイムゾーン、ノートを含める。
+ファイル全体に形式名、版、出力日時（オフセット付きISO 8601）、集計タイムゾーン、記録件数、記録配列を含める。各記録にはID、開始・終了、種類、入力タイムゾーン、日記を含める。
 
 作成日時・更新日時・更新番号は参考情報として含める。所有者ID・許可ユーザー表・認証情報は含めない。復元先の所有者は必ずログイン中の本人にする。
 
@@ -124,7 +124,7 @@ JSON形式の識別子は `sleep-log-backup`、形式の版は `1`。ファイ�
 
 ## 8. 表示設定
 
-ノートの前日表示と、分析の期間選択はブラウザーのlocalStorageに利用者別で保存する。初期値は前日表示ON、分析は週間。表示設定に睡眠記録やノート本文は含めない。ノートの日付は就寝日の日本時間の日付から0日または1日引いて算出し、DBの日時や日別集計を変更しない。端末間同期は行わない。
+日記の前日表示と、分析の期間選択はブラウザーのlocalStorageに利用者別で保存する。初期値は前日表示ON、分析は週間。表示設定に睡眠記録や日記本文は含めない。日記の日付は就寝日の日本時間の日付から0日または1日引いて算出し、DBの日時や日別集計を変更しない。端末間同期は行わない。
 
 ## 9. 将来の拡張
 
@@ -140,3 +140,7 @@ DB実装の参照先。実際のSupabaseプロジェクトへの設定は [SETUP
 - [PostgreSQL：日時型とタイムゾーン](https://www.postgresql.org/docs/current/datatype-datetime.html)
 - [PostgreSQL：範囲型と排他制約](https://www.postgresql.org/docs/current/rangetypes.html)
 - [Supabase：RLSによる所有者のアクセス制御](https://supabase.com/docs/guides/database/postgres/row-level-security)
+
+## 日記の表示ロック【2026-11-18】
+
+`note_locked boolean not null default false` を追加。本文が空の場合は未ロックにする。既存の日時・本文は変更しない。本人の `note_lock_settings` に version=1、16バイトのsalt、PBKDF2-SHA256（600,000回、256ビット）の照合値を保存し、RLSで本人の取得と初回登録だけを許可する。解除状態と入力パスワードはDBに保存しない。JSONバックアップは本文・note_lockedを保持し、照合値は含めない。旧形式はfalseとして読み込む。本文の暗号化は行わない。追加SQLは [更新手順](UPDATE_20261118.md) を参照。

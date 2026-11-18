@@ -8,6 +8,22 @@ body {
 }
 .section-heading h1 { line-height: 1.5; }
 .app-footer { border-top: 0; }
+.notes-display-setting { display: flex; align-items: center; flex-wrap: wrap; gap: 2px 14px; }
+.diary-lock-all { margin-left: auto; min-height: 44px; font-size: 11px; }
+.diary-locked { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 65px; color: #847292; font-size: 12px; }
+.record-note-toggle .diary-locked { justify-content: flex-start; min-height: 44px; }
+.diary-form-locked { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 25px 16px; border: 1px solid #e6dfed; border-radius: 12px; background: #f8f5fc; color: #796489; font-size: 13px; }
+.diary-lock-dialog { width: min(440px, calc(100% - 28px)); max-height: calc(100dvh - 30px); padding: 0; border: 1px solid #e6dfed; border-radius: 17px; color: var(--ink); background: white; box-shadow: 0 20px 80px #37244930; overflow-y: auto; }
+.diary-lock-dialog::backdrop { background: #2f263f55; backdrop-filter: blur(3px); }
+.diary-lock-dialog .dialog-heading { padding: 18px 20px; }
+.diary-lock-dialog .dialog-heading h2 { font-size: 18px; font-weight: 700; }
+.diary-lock-dialog-content { display: flex; flex-direction: column; gap: 15px; padding: 6px 22px 22px; font-size: 13px; color: #756280; }
+.diary-lock-dialog-content > svg { align-self: center; color: #8171b6; }
+.diary-lock-dialog-content > label { display: flex; flex-direction: column; gap: 6px; font-size: 12px; }
+.diary-lock-dialog input { width: 100%; min-width: 0; min-height: 45px; padding: 9px 11px; border: 1px solid #ded6e9; border-radius: 8px; background: white; font-size: 16px; color: #554461; }
+.diary-lock-dialog-content .diary-lock-help { font-size: 11px; line-height: 1.8; color: #918399; }
+.diary-lock-error { position: fixed; bottom: 85px; left: 50%; transform: translateX(-50%); width: min(440px, calc(100% - 30px)); z-index: 100; padding: 15px; background: #fff3f2; color: #a95656; border: 1px solid #ebc2c2; border-radius: 11px; font-size: 12px; }
+.diary-lock-error button { display: block; margin: 8px 0 0 auto; border: 0; background: none; color: inherit; }
 
 /* 日時入力のネイティブな最小幅が、スマホでグリッドを押し広げないようにする。 */
 .datetime-row { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); }

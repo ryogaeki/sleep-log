@@ -1,11 +1,15 @@
 import { useState } from "react";
 import { dateLabel, dayOf, duration, formatDuration, KIND_LABEL, minutesOnDay, timeOf, type SleepEntry } from "../lib/sleep";
 import { Icon } from "./Icon";
+import { useNoteLock } from "./NoteLockProvider";
 
 export function DailyRecords({ records, selected, onEdit }: { records: SleepEntry[]; selected: string; onEdit: (entry: SleepEntry) => void }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  return <div className="record-list">{records.map(record => {
-    const expanded = expandedId === record.id;
+  const lock = useNoteLock();
+  return <div className="record-list">{records.map(raw => {
+    const record = lock.current(raw);
+    const hidden = lock.hidden(record);
+    const expanded = !hidden && expandedId === record.id;
     const note = record.note?.trimEnd();
     return <article className={`record-card ${record.kind}`} key={record.id}>
       <button type="button" className="record-main" onClick={event => { event.currentTarget.focus(); onEdit(record); }} aria-label={`${KIND_LABEL[record.kind]} ${timeOf(record.start_at)}から${timeOf(record.end_at)} 編集`}>
@@ -13,7 +17,7 @@ export function DailyRecords({ records, selected, onEdit }: { records: SleepEntr
         <span className="record-content"><span className="record-top"><strong>{KIND_LABEL[record.kind]}</strong></span><span className="record-times">{dayOf(record.start_at) !== selected && <small>{dayOf(record.start_at) < selected ? "前日以前から " : `${dateLabel(dayOf(record.start_at))} `}</small>}{timeOf(record.start_at)}<span className="time-dash">—</span>{timeOf(record.end_at)}{dayOf(record.end_at) !== selected && <small>翌日以降まで</small>}</span></span>
         <span className="record-duration"><strong>{formatDuration(duration(record))}</strong>{minutesOnDay(record, selected) !== duration(record) && <small>この日の分 {formatDuration(minutesOnDay(record, selected))}</small>}<Icon name="right" size={17} /></span>
       </button>
-      {note && <button type="button" className={`record-note-toggle ${expanded ? "expanded" : ""}`} aria-label={`${KIND_LABEL[record.kind]} ${timeOf(record.start_at)}のノートを${expanded ? "閉じる" : "全文表示"}`} aria-expanded={expanded} aria-controls={`daily-note-${record.id}`} onClick={event => { event.stopPropagation(); setExpandedId(expanded ? null : record.id); }}><span className="record-note-heading"><span>ノート</span><span>{expanded ? "閉じる" : "全文を読む"}<Icon name="right" size={13} /></span></span><span className="record-note" id={`daily-note-${record.id}`}>{note}</span></button>}
+      {note && <button type="button" className={`record-note-toggle ${expanded ? "expanded" : ""}`} aria-label={hidden ? `${KIND_LABEL[record.kind]} ${timeOf(record.start_at)}の日記のロックを解除` : `${KIND_LABEL[record.kind]} ${timeOf(record.start_at)}の日記を${expanded ? "閉じる" : "全文表示"}`} aria-expanded={expanded} aria-controls={`daily-note-${record.id}`} onClick={event => { event.stopPropagation(); if (hidden) { setExpandedId(record.id); lock.unlock(); } else setExpandedId(expanded ? null : record.id); }}>{hidden ? <span className="diary-locked" id={`daily-note-${record.id}`}><Icon name="lock" size={21} /><span>ロックされた日記</span></span> : <><span className="record-note-heading"><span>日記</span><span>{expanded ? "閉じる" : "全文を読む"}<Icon name="right" size={13} /></span></span><span className="record-note" id={`daily-note-${record.id}`}>{note}</span></>}</button>}
     </article>;
   })}</div>;
 }

@@ -22,7 +22,7 @@ test("未保存の入力は本人と24時間の期限を確認して復元する
   store.set(draftKey("self"),JSON.stringify({userId:"self",expiresAt:Date.now()-1,values}));
   assert.equal(readDraft("self"),null);assert.equal(store.has(draftKey("self")),false);
 });
-test("旧版の下書きは廃止項目を捨て、書きかけの日時とノートを保持する",()=>{
+test("旧版の下書きは廃止項目を捨て、書きかけの日時と日記を保持する",()=>{
   const values={...initialForm("2026-11-16"),startTime:"02:00",note:"書きかけの本文",intention:"unknown",intentionTouched:true,startEstimated:true,endEstimated:false};
   const text=JSON.stringify({userId:"self",expiresAt:Date.now()+60_000,values});
   Object.defineProperty(globalThis,"sessionStorage",{configurable:true,value:{getItem:()=>text}});

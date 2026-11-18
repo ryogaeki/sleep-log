@@ -13,6 +13,7 @@ export interface SleepInput {
   kind: Kind;
   record_timezone: "Asia/Tokyo";
   note: string | null;
+  note_locked?: boolean;
 }
 export interface SleepEntry extends SleepInput {
   user_id: string;
@@ -62,8 +63,8 @@ export function dateLabel(day: string, year = false): string {
 export function overlap(a: SleepInput, b: SleepInput): boolean {
   return a.id !== b.id && Date.parse(a.start_at) < Date.parse(b.end_at) && Date.parse(a.end_at) > Date.parse(b.start_at);
 }
-const CONTENT_FIELDS = ["id", "start_at", "end_at", "kind", "record_timezone", "note"] as const;
-export function sameContent(a: SleepInput, b: SleepInput): boolean { return CONTENT_FIELDS.every(k => a[k] === b[k]); }
+const CONTENT_FIELDS = ["id", "start_at", "end_at", "kind", "record_timezone", "note", "note_locked"] as const;
+export function sameContent(a: SleepInput, b: SleepInput): boolean { return CONTENT_FIELDS.every(k => k === "note_locked" ? Boolean(a[k]) === Boolean(b[k]) : a[k] === b[k]); }
 export function inputOnly(e: SleepInput): SleepInput {
   return Object.fromEntries(CONTENT_FIELDS.map(k => [k, e[k]])) as unknown as SleepInput;
 }
@@ -87,9 +88,11 @@ export function validateInput(raw: unknown, now = Date.now()): SleepInput {
   if (Date.parse(x.end_at as string) > now) throw new AppError("invalid", "終了した睡眠を記録してください。終了日時が未来になっています。");
   if (!KINDS.includes(x.kind as Kind)) throw new AppError("invalid", "睡眠の種類を選んでください。");
   if (x.record_timezone !== "Asia/Tokyo") throw new AppError("invalid", "初期版は日本時間の記録に対応しています。");
-  if (x.note !== null && typeof x.note !== "string") throw new AppError("invalid", "ノートはテキストで入力してください。");
+  if (x.note !== null && typeof x.note !== "string") throw new AppError("invalid", "日記はテキストで入力してください。");
   if (typeof x.note === "string") x.note = x.note.trimEnd();
-  if (typeof x.note === "string" && [...x.note].length > 2000) throw new AppError("invalid", "ノートは2,000文字以内にしてください。");
+  if (typeof x.note === "string" && [...x.note].length > 2000) throw new AppError("invalid", "日記は2,000文字以内にしてください。");
+  if (x.note_locked !== undefined && typeof x.note_locked !== "boolean") throw new AppError("invalid", "日記のロック設定を確認してください。");
+  x.note_locked = Boolean(x.note_locked) && Boolean(x.note);
   return inputOnly({ ...x, note: x.note === "" ? null : x.note } as unknown as SleepInput);
 }
 export function validateEntry(raw: unknown): SleepEntry {

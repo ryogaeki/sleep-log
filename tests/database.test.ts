@@ -11,7 +11,7 @@ let beforeMigration: Record<string, unknown>;
 let afterMigration: Record<string, unknown>;
 const id=(n:number)=>`bbbbbbbb-bbbb-4bbb-8bbb-${String(n).padStart(12,"0")}`;
 async function asUser(user:string){await db.exec(`reset role; set role authenticated; select set_config('request.jwt.claim.sub','${user}',false);`);}
-async function reset(){await db.exec("reset role; truncate public.sleep_entries;");await asUser(owner);}
+async function reset(){await db.exec("reset role; truncate public.sleep_entries, public.note_lock_settings;");await asUser(owner);}
 async function insert(n:number,start="2025-01-01T02:00:00Z",end="2025-01-01T08:00:00Z",user=owner){return db.query("insert into public.sleep_entries(id,user_id,start_at,end_at,kind,note) values($1,$2,$3,$4,'normal',null) returning *",[id(n),user,start,end]);}
 before(async()=>{
   await db.exec(`create role anon; create role authenticated; create schema auth;
@@ -22,17 +22,20 @@ before(async()=>{
   await db.exec(await readFile(new URL("../supabase/migrations/202610180001_sleep_log.sql",import.meta.url),"utf8"));
   await db.query("insert into public.app_members values($1),($2)",[owner,other]);
   // 本番には触れず、旧SQLで作ったDBの実データを使って追加移行を検証する。
-  await db.query("insert into public.sleep_entries(id,user_id,start_at,end_at,kind,intention,start_accuracy,end_accuracy,note) values($1,$2,'2025-01-01T02:00Z','2025-01-01T08:00Z','doze','unknown','estimated','exact','以前のノート')",[id(99),owner]);
-  await db.exec("update public.sleep_entries set note=E'以前のノート\\n改行も保持'");
+  await db.query("insert into public.sleep_entries(id,user_id,start_at,end_at,kind,intention,start_accuracy,end_accuracy,note) values($1,$2,'2025-01-01T02:00Z','2025-01-01T08:00Z','doze','unknown','estimated','exact','以前の日記')",[id(99),owner]);
+  await db.exec("update public.sleep_entries set note=E'以前の日記\\n改行も保持'");
   beforeMigration = (await db.query<Record<string,unknown>>("select * from public.sleep_entries")).rows[0];
   const migration=await readFile(new URL("../supabase/migrations/202611170001_remove_sleep_flags.sql",import.meta.url),"utf8");
   await db.exec(migration);
   await db.exec(migration); // 誤って同じ更新SQLを再実行してもデータを失わない。
+  const diaryMigration=await readFile(new URL("../supabase/migrations/202611180001_diary_display_lock.sql",import.meta.url),"utf8");
+  await db.exec(diaryMigration); await db.exec(diaryMigration);
   afterMigration = (await db.query<Record<string,unknown>>("select * from public.sleep_entries")).rows[0];
 });
 after(async()=>{await db.close();});
 test("旧DBの更新で廃止3列だけを削除し、記録・本文・更新番号・利用許可を保持する",async()=>{
   const expected={...beforeMigration};
+  expected.note_locked=false;
   for(const key of ["intention","start_accuracy","end_accuracy"]){delete expected[key];assert.equal(key in afterMigration,false);}
   assert.deepEqual(afterMigration,expected);
   assert.equal(afterMigration.revision,2);
@@ -116,4 +119,30 @@ test("旧形式のバックアップも復元でき、廃止属性だけの差�
   const restored=(await db.query<Record<string,unknown>>("select * from public.sleep_entries")).rows[0];
   assert.equal(restored.kind,"normal");assert.equal(restored.id,id(1));
   for(const key of ["intention","start_accuracy","end_accuracy"])assert.equal(key in restored,false);
+});
+
+test("日記のパスワード照合値は本人だけが登録・取得でき、他人や未許可ユーザーは操作できない",async()=>{
+  await reset();
+  const salt="a".repeat(32),verifier="b".repeat(64);
+  await db.query("insert into public.note_lock_settings(user_id,salt,verifier) values($1,$2,$3)",[owner,salt,verifier]);
+  assert.equal((await db.query("select * from public.note_lock_settings")).rows.length,1);
+  await assert.rejects(db.query("update public.note_lock_settings set verifier=$1",["c".repeat(64)]),{code:"42501"});
+  await asUser(other);assert.equal((await db.query("select * from public.note_lock_settings")).rows.length,0);
+  await assert.rejects(db.query("insert into public.note_lock_settings(user_id,salt,verifier) values($1,$2,$3)",[owner,salt,verifier]),{code:"42501"});
+  await asUser(stranger);await assert.rejects(db.query("insert into public.note_lock_settings(user_id,salt,verifier) values($1,$2,$3)",[stranger,salt,verifier]),{code:"42501"});
+  await db.exec("reset role; set role anon;");await assert.rejects(db.query("select * from public.note_lock_settings"),{code:"42501"});
+});
+
+test("日記のロックは本文を変更せず、書き出し・復元でも維持し、旧バックアップは未ロックで復元する",async()=>{
+  await reset();await insert(1);
+  await db.query("update public.sleep_entries set note='元の日記の本文',note_locked=true where id=$1",[id(1)]);
+  const result=await db.query<{backup:{entries:Record<string,unknown>[]}}>("select public.export_sleep_backup() as backup");
+  const backup=result.rows[0].backup;
+  assert.equal(backup.entries[0].note,"元の日記の本文");assert.equal(backup.entries[0].note_locked,true);
+  await db.query("delete from public.sleep_entries where id=$1",[id(1)]);
+  await db.query("select public.restore_sleep_backup($1::jsonb)",[JSON.stringify(backup)]);
+  assert.equal((await db.query<{note_locked:boolean}>("select note_locked from public.sleep_entries")).rows[0].note_locked,true);
+  await db.query("delete from public.sleep_entries where id=$1",[id(1)]);delete backup.entries[0].note_locked;
+  await db.query("select public.restore_sleep_backup($1::jsonb)",[JSON.stringify(backup)]);
+  assert.equal((await db.query<{note_locked:boolean}>("select note_locked from public.sleep_entries")).rows[0].note_locked,false);
 });
