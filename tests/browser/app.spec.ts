@@ -165,6 +165,7 @@ test("ノートに全期間の内容を新しい順で表示し、検索・編�
   await expect(page.locator(".note-body").first()).toHaveText("最近のノート");
   await expect(page.locator(".note-body").last()).toHaveText("昔のノート\n二行目の内容");
   await page.getByLabel("ノートを検索").fill("昔");await expect(page.locator(".note-card")).toHaveCount(1);
+  await page.getByRole("button",{name:"2024-05-18 通常睡眠のノートを全文表示"}).click();
   await page.getByRole("button",{name:"2024-05-18 通常睡眠のノートを編集"}).click();
   const form=page.getByRole("dialog");await expect(form.getByLabel("開始日",{exact:true})).toHaveValue("2024-05-18");
   await form.getByLabel("ノート",{exact:true}).fill("更新した昔のノート\n改行も保持");
@@ -173,6 +174,7 @@ test("ノートに全期間の内容を新しい順で表示し、検索・編�
   await page.getByLabel("ノートを検索").fill("");await expect(page.locator(".note-card")).toHaveCount(3);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
   await page.screenshot({path:`/tmp/sleep-log-notes-${info.project.name}.png`,fullPage:true});
+  await page.getByRole("button",{name:"2024-05-18 通常睡眠のノートを全文表示"}).click();
   await page.getByRole("button",{name:"2024-05-18 通常睡眠のノートを編集"}).click();
   await form.getByLabel("ノート",{exact:true}).fill("");await form.getByRole("button",{name:"保存する",exact:true}).click();
   await expect(form).not.toBeVisible();await expect(page.locator(".note-card")).toHaveCount(2);
@@ -224,8 +226,8 @@ test("分析の週間・月間・年間・全期間を画面移動と再読み�
   }
 });
 
-test("ノートを4行に収め、日付・時刻を枠の外に置き、前日表示の設定を保持する",async({page},info)=>{
-  const longNote="その日の出来事を振り返って書いた、長いノートの文章です。".repeat(14)+"\n最後の行も編集画面で読めます。";
+test("ノートの改行を4行プレビューで詰め、1件だけ全文を展開して編集できる",async({page},info)=>{
+  const longNote="一行目の振り返り。\n\n二行目には、その日の出来事を書いています。\n"+"長いノートの文章です。".repeat(35)+"\n最後の行も編集画面で読めます。";
   await page.clock.install({time:new Date("2026-10-18T12:00:00Z")});
   await page.addInitScript(({longNote})=>{
     const entries=[
@@ -241,17 +243,40 @@ test("ノートを4行に収め、日付・時刻を枠の外に置き、前日�
   await expect(page.locator(".note-day-heading time").first()).toHaveAttribute("datetime","2025-12-31");
   await expect(page.locator(".note-day").first().locator(".note-card")).toHaveCount(2);
   await expect(page.locator(".note-card .note-sleep, .note-card time")).toHaveCount(0);
-  const card=page.getByRole("button",{name:"2026-01-01 通常睡眠のノートを編集",exact:true});
-  expect(await card.locator(".note-body").evaluate(el=>{
-    const style=getComputedStyle(el);return style.webkitLineClamp==="4" && el.clientHeight<el.scrollHeight && el.clientHeight<=parseFloat(style.lineHeight)*4+1;
+  await expect(page.getByText("睡眠開始日の前日で表示しています。",{exact:false})).toHaveCount(0);
+  await expect(page.locator(".notes-preview-help")).toHaveCount(0);
+  await expect(page.locator(".note-sleep-time").first()).toHaveText("13:00〜14:00");
+  expect(await page.locator(".note-entry-header").first().evaluate(el=>{
+    const day=el.querySelector(".note-date-day")!,month=el.querySelector(".note-date-month")!;
+    const date=el.querySelector("time")!.getBoundingClientRect(),dot=el.querySelector(".dot")!.getBoundingClientRect();
+    return parseFloat(getComputedStyle(day).fontSize)>parseFloat(getComputedStyle(month).fontSize)*2 && dot.left>=date.right && dot.left-date.right<24;
   })).toBe(true);
-  await card.click();const form=page.getByRole("dialog");
+  const card=page.getByRole("button",{name:"2026-01-01 通常睡眠のノートを全文表示",exact:true});
+  const body=page.locator("#note-body-aaaaaaaa-aaaa-4aaa-8aaa-000000000001");
+  const edit=page.getByRole("button",{name:"2026-01-01 通常睡眠のノートを編集",exact:true});
+  await expect(edit).toHaveCount(0);
+  expect(await body.evaluate(el=>{
+    const style=getComputedStyle(el);return style.whiteSpace==="normal" && style.webkitLineClamp==="4" && el.clientHeight<el.scrollHeight && el.clientHeight<=parseFloat(style.lineHeight)*4+1;
+  })).toBe(true);
+  await page.screenshot({path:`/tmp/sleep-log-compact-notes-${info.project.name}.png`,fullPage:true});
+  await card.click();await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.locator(".note-card.expanded")).toHaveCount(1);
+  await expect(body).toHaveCSS("white-space","pre-wrap");
+  expect(await body.evaluate(el=>el.clientHeight>=el.scrollHeight)).toBe(true);
+  await expect(body).toHaveText(longNote);
+  await expect(edit).toBeVisible();
+  await page.screenshot({path:`/tmp/sleep-log-expanded-note-${info.project.name}.png`,fullPage:true});
+  await page.getByRole("button",{name:"2026-01-01 昼寝のノートを全文表示",exact:true}).click();
+  await expect(page.locator(".note-card.expanded")).toHaveCount(1);await expect(edit).toHaveCount(0);
+  await expect(body).toHaveCSS("white-space","normal");
+  await card.click();await edit.click();const form=page.getByRole("dialog");
   await expect(form.getByLabel("開始日",{exact:true})).toHaveValue("2026-01-01");
   await expect(form.getByLabel("ノート",{exact:true})).toHaveValue(longNote);
   await form.getByRole("button",{name:"閉じる",exact:true}).click();
-  await expect(card).toBeFocused();
+  await expect(edit).toBeFocused();
   await expect(page.getByRole("link",{name:"本文へ移動",exact:true})).not.toBeInViewport();
-  await page.screenshot({path:`/tmp/sleep-log-compact-notes-${info.project.name}.png`,fullPage:true});
+  await page.getByRole("button",{name:"2026-01-01 通常睡眠のノートを閉じる",exact:true}).click();
+  await expect(page.locator(".note-card.expanded")).toHaveCount(0);
   await toggle.uncheck();await expect(page.locator(".note-day-heading time").first()).toHaveAttribute("datetime","2026-01-01");
   await page.getByLabel("ノートを検索").fill("2026-01-01");await expect(page.locator(".note-card")).toHaveCount(2);
   await page.getByLabel("ノートを検索").fill("");

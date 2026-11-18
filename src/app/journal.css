@@ -88,17 +88,32 @@
 .notes-date-switch input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: white; transition: transform .15s; }
 .notes-date-switch input:checked { background: #8171c7; }
 .notes-date-switch input:checked::after { transform: translateX(14px); }
-.notes-display-setting p, .notes-preview-help { font-size: 11px; color: #81708e; line-height: 1.6; }
-.notes-preview-help { margin-bottom: 18px; }
-.notes-list { display: grid; gap: 22px; }
+.notes-list { display: grid; gap: 24px; }
 .note-day { min-width: 0; }
-.note-day-heading { font-size: 18px; color: #625070; font-weight: 500; margin-bottom: 8px; }
-.note-entry + .note-entry { margin-top: 9px; }
-.note-card { display: block; text-align: left; width: 100%; padding: 13px 16px; min-width: 0; cursor: pointer; }
-.note-card:hover { border-color: #c9b9dd; background: #fdfbff; }
-.note-sleep { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin: 0 3px 5px; color: #82718f; font-size: 11px; line-height: 1.5; }
-.note-sleep > span { font-variant-numeric: tabular-nums; }
-.note-body { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; color: #554662; line-height: 1.55; }
+.note-entry-header { display: flex; align-items: center; justify-content: space-between; gap: 15px; min-height: 55px; margin: 0 3px 8px; }
+.note-entry-header.continued { justify-content: flex-end; min-height: 32px; margin-bottom: 5px; }
+.note-day-heading { color: #625070; font-weight: 400; flex-shrink: 0; }
+.note-day-heading time { display: flex; align-items: center; gap: 9px; font-variant-numeric: tabular-nums; }
+.note-date-day { font-size: 44px; line-height: 1; letter-spacing: -1.5px; }
+.note-date-detail { display: flex; flex-direction: column; gap: 3px; align-items: flex-start; }
+.note-date-weekday { display: grid; place-items: center; width: 23px; height: 23px; border-radius: 50%; background: #fff; font-size: 12px; }
+.note-date-month { font-size: 10px; color: #92869e; }
+.note-entry + .note-entry { margin-top: 7px; }
+.note-card { width: 100%; min-width: 0; overflow: hidden; }
+.note-card:hover { border-color: #c9b9dd; }
+.note-content-toggle { display: block; width: 100%; min-height: 44px; padding: 12px 15px; border: 0; border-radius: inherit; background: transparent; text-align: left; color: inherit; }
+.note-content-toggle:focus-visible { outline-offset: -3px; }
+.note-sleep { display: flex; flex: 1; min-width: 0; align-items: center; gap: 8px; color: #82718f; }
+.note-entry-header.continued .note-sleep { flex: 0 0 auto; }
+.note-sleep .dot { width: 8px; height: 8px; flex-shrink: 0; }
+.note-sleep-detail { display: flex; flex-direction: column; gap: 2px; align-items: flex-end; margin-left: auto; }
+.note-sleep-kind { font-size: 10px; line-height: 1.3; }
+.note-sleep-time { font-size: 12px; line-height: 1.4; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.note-body { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; white-space: normal; overflow-wrap: anywhere; font-size: 13px; color: #554662; line-height: 1.55; }
+.note-card.expanded .note-body { display: block; -webkit-line-clamp: unset; overflow: visible; white-space: pre-wrap; }
+.note-actions { display: flex; justify-content: flex-end; padding: 0 6px 4px; }
+.note-actions .icon-button { width: 44px; height: 40px; color: #8171b6; }
+.note-field textarea { font-size: 15px; line-height: 1.65; }
 .time-tools:has(> .now-button:only-child) { justify-content: flex-end; }
 .time-tools:empty { display: none; }
 .notes-more { display: flex; margin: 24px auto 0; }
@@ -122,12 +137,11 @@
   .notes-search { padding: 0 10px; gap: 7px; }
   .notes-search input { font-size: 16px; }
   .notes-search input::placeholder { font-size: 10px; }
-  .note-card { padding: 12px 14px; }
-  .note-day-heading { font-size: 17px; }
-  .note-sleep { font-size: 10px; gap: 5px; }
-  .note-body { font-size: 14px; }
-  .notes-list { gap: 20px; }
-  .notes-display-setting p, .notes-preview-help { font-size: 10px; }
+  .note-content-toggle { padding: 11px 13px; }
+  .note-date-day { font-size: 42px; }
+  .note-sleep { gap: 7px; }
+  .note-sleep-kind { font-size: 9px; }
+  .notes-list { gap: 22px; }
   .analysis-controls { flex-wrap: nowrap; gap: 8px; }
   .analysis-period button { padding: 8px 7px; font-size: 11px; white-space: nowrap; }
   .analysis-controls > .today-button { flex-shrink: 0; font-size: 11px; padding: 7px 9px; }
