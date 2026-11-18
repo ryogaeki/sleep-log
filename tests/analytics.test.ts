@@ -1,10 +1,45 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { analyze, periodRange, timePoints, timelineSegments } from "../src/lib/analytics";
+import { analyze, eventTimeDistribution, periodRange, timePoints, timelineSegments } from "../src/lib/analytics";
 import { fromJst, shiftDay, type Kind, type SleepEntry } from "../src/lib/sleep";
 import { CloudRepository, DemoRepository } from "../src/lib/repository";
 import { makeBackup } from "../src/lib/backup";
 import type { SupabaseClient } from "@supabase/supabase-js";
+
+test("就寝・起床の割合は睡眠の長さに関係なく回数で集計し、昼寝だけ除外できる", () => {
+  const entries = [entry(1, "2026-10-17 00:00", "2026-10-17 12:00"), entry(2, "2026-10-17 13:00", "2026-10-17 13:10", "nap"), entry(3, "2026-10-17 14:00", "2026-10-17 14:20", "nap"), entry(4, "2026-10-17 16:00", "2026-10-17 17:00", "doze")];
+  const range = periodRange("2026-10-17", "month");
+  const all = eventTimeDistribution(entries, range);
+  for (const event of [all.start, all.end]) {
+    assert.equal(event.total, 4); assert.deepEqual(event.byKind, {normal: 1, nap: 2, doze: 1, other: 0});
+    assert.equal(event.bins.reduce((sum, bin) => sum + bin.count, 0), 4);
+  }
+  const excluded = eventTimeDistribution(entries, range, "without-nap");
+  assert.equal(excluded.start.total, 2); assert.equal(excluded.end.byKind.nap, 0);
+  assert.equal(timePoints(entries, range, "without-nap").length, 4);
+});
+
+test("月境界の就寝と起床はそれぞれの実際の日付で数える", () => {
+  const entries = [entry(1, "2026-09-30 23:00", "2026-10-01 07:00"), entry(2, "2026-10-31 23:00", "2026-11-01 00:00")];
+  const october = eventTimeDistribution(entries, periodRange("2026-10-17", "month"));
+  assert.equal(october.start.total, 1); assert.equal(october.start.bins[5].count, 1);
+  assert.equal(october.end.total, 1); assert.equal(october.end.bins[1].count, 1);
+  const november = eventTimeDistribution(entries, periodRange("2026-11-01", "month"));
+  assert.equal(november.start.total, 0); assert.equal(november.end.bins[0].count, 1);
+  const newYear = [entry(3, "2025-12-31 23:00", "2026-01-01 00:00")];
+  const yearRange = periodRange("2026-01-01", "year", newYear);
+  assert.equal(yearRange.days.length, 0);
+  assert.equal(eventTimeDistribution(newYear, yearRange).end.total, 1);
+});
+
+test("4時間ごとの区間境界と長時間睡眠を1回ずつ集計する", () => {
+  const entries = [entry(1, "2026-10-17 03:59", "2026-10-17 04:00"), entry(2, "2026-10-17 04:00", "2026-10-18 20:00")];
+  const data = eventTimeDistribution(entries, periodRange("2026-10-17", "month"));
+  assert.deepEqual(data.start.bins.map(bin => bin.count), [1, 1, 0, 0, 0, 0]);
+  assert.deepEqual(data.end.bins.map(bin => bin.count), [0, 1, 0, 0, 0, 1]);
+  const empty = eventTimeDistribution(entries, periodRange("2026-10-17", "month"), "other");
+  assert.equal(empty.start.total, 0); assert.ok(empty.start.bins.every(bin => bin.count === 0));
+});
 
 function entry(n: number, start: string, end: string, kind: Kind = "normal"): SleepEntry {
   return {

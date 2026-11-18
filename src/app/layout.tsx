@@ -5,7 +5,7 @@ import "./analysis.css";
 import "./journal.css";
 import "./refinements.css";
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
-const rounded = localFont({ src: "../../public/fonts/zen-maru-gothic-regular.woff2", weight: "400", style: "normal", display: "swap", variable: "--font-rounded" });
+const rounded = localFont({ src: [{ path: "../../public/fonts/zen-maru-gothic-medium.woff2", weight: "500" }, { path: "../../public/fonts/zen-maru-gothic-bold.woff2", weight: "700" }], style: "normal", display: "swap", variable: "--font-rounded" });
 export const metadata: Metadata = {
   title: "Sleep Log — 睡眠記録",
   description: "睡眠の日時・種類・ノートの記録と、睡眠時間の集計・分析。",

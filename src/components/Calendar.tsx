@@ -20,7 +20,7 @@ export function Calendar({ selected, entries, compact = false, onSelect, onMonth
         </button>;
       })}
     </div>
-    {!compact && <p className="calendar-ring-key">円は1周12時間。超えた分はオレンジの2周目で表示します。</p>}
+    {!compact && <p className="calendar-ring-key">円は1周12時間。ピンクが1周目、超えた分は黄色の2周目です。</p>}
     <div className="calendar-footer"><span><i className="today-mark"/> 今日</span><button type="button" className="text-button" onClick={()=>onSelect(today)}>今日に戻る</button></div>
   </section>;
 }

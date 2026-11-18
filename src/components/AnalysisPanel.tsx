@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { analyze, daysBetween, entryLabel, periodRange, timePoints, timelineSegments, type Period, type PeriodRange } from "../lib/analytics";
-import { KINDS, KIND_LABEL, dateLabel, dayOf, formatDuration, shiftDay, shiftMonth, timeOf, type Kind, type SleepEntry } from "../lib/sleep";
+import { analyze, entryLabel, periodRange, timePoints, timelineSegments, type Period } from "../lib/analytics";
+import { KINDS, KIND_LABEL, dateLabel, dayOf, formatDuration, shiftDay, shiftMonth, type Kind, type SleepEntry } from "../lib/sleep";
 import { Icon } from "./Icon";
+import { useChartScroll } from "../lib/use-chart-scroll";
+import { TimeTrends } from "./TimeTrends";
+import { EventTimeDistributions } from "./EventTimeDistributions";
 import { useDisplayPreference } from "../lib/display-preference";
 
 type Analysis = ReturnType<typeof analyze>;
@@ -9,21 +12,6 @@ const compactDate = (day: string) => `${Number(day.slice(5, 7))}/${Number(day.sl
 const color = (kind: Kind) => `var(--${kind})`;
 const percent = (value: number) => `${value.toFixed(1)}%`;
 const PERIOD_LABEL: Record<Period, string> = { week: "週間", month: "月間", year: "年間", all: "全期間" };
-
-function useChartScroll(selected: string, days: string[], enabled = true) {
-  const ref = useRef<HTMLDivElement>(null);
-  const exact = days.indexOf(selected);
-  const index = exact >= 0 ? exact : !days.length ? -1 : selected < days[0] ? 0 : days.length - 1;
-  const count = days.length;
-  const first = days[0];
-  useEffect(() => {
-    const viewport = ref.current;
-    if (viewport && index >= 0 && enabled) {
-      viewport.scrollLeft = 40 + (viewport.scrollWidth - 40) * (index + 0.5) / count - viewport.clientWidth / 2;
-    }
-  }, [index, count, first, enabled]);
-  return ref;
-}
 
 function KindLegend() {
   return <div className="analysis-legend">{KINDS.map(kind => <span key={kind}><i className={`dot ${kind}`} />{KIND_LABEL[kind]}</span>)}</div>;
@@ -117,42 +105,6 @@ function KindBreakdown({ data }: { data: Analysis }) {
   </section>;
 }
 
-function DozeChart({ data }: { data: Analysis }) {
-  const maximum = Math.max(1, ...data.dozeHours.map(bin => bin.count));
-  return <section className="panel analysis-panel" aria-labelledby="doze-title">
-    <div className="analysis-panel-heading"><div><h2 id="doze-title">寝落ちが始まった時間帯</h2><p>期間内に始まった記録を、1件1回として数えます。</p></div></div>
-    <div className="doze-total"><strong>{data.recordedDays ? data.dozeCount : "—"}</strong><span>回の寝落ち</span></div>
-    <div className="doze-bins">{data.dozeHours.map(bin => <div key={bin.first} className="doze-bin"><span>{bin.first}〜{bin.until}時</span><span className="doze-bin-track" aria-hidden="true"><i style={{ width: `${bin.count / maximum * 100}%` }} /></span><strong>{data.recordedDays ? `${bin.count}回` : "—"}</strong></div>)}</div>
-    <p className="analysis-caption">日付をまたいでも発生は1回です。期間より前に始まった寝落ちは、今回の発生回数には含めません。</p>
-  </section>;
-}
-
-function TimeTrends({ entries, range, selected, onEdit }: { entries: SleepEntry[]; range: PeriodRange; selected: string; onEdit: (entry: SleepEntry) => void }) {
-  const [kind, setKind] = useState<Kind | "all">("all");
-  const points = useMemo(() => timePoints(entries, range, kind), [entries, range, kind]);
-  const plotDays = useMemo(() => range.trimmed && points.length ? daysBetween(points[0].day, shiftDay(points[points.length - 1].day, 1)) : range.days, [range, points]);
-  const dayIndex = new Map(plotDays.map((day, index) => [day, index]));
-  const tick = plotDays.length > 400 ? 30 : plotDays.length > 31 ? 7 : 1;
-  const showYear = plotDays[0]?.slice(0, 4) !== plotDays.at(-1)?.slice(0, 4);
-  const scroll = useChartScroll(selected, plotDays, points.length > 0);
-  const rows = entries.filter(entry => (kind === "all" || entry.kind === kind) && (dayOf(entry.start_at) >= range.first && dayOf(entry.start_at) < range.until || dayOf(entry.end_at) >= range.first && dayOf(entry.end_at) < range.until)).sort((a, b) => a.start_at.localeCompare(b.start_at));
-  return <section className="panel analysis-panel" aria-labelledby="time-trends-title">
-    <div className="analysis-panel-heading"><div><h2 id="time-trends-title">睡眠開始・起床時刻の推移</h2><p>1日に何回あっても、すべての開始・起床を表示します。</p></div><label className="chart-filter">種類<select aria-label="時刻グラフの種類" value={kind} onChange={event => setKind(event.target.value as Kind | "all")}><option value="all">すべての睡眠</option>{KINDS.map(k => <option value={k} key={k}>{KIND_LABEL[k]}</option>)}</select></label></div>
-    <div className="analysis-legend"><span><i className="time-symbol start" />睡眠開始</span><span><i className="time-symbol end" />起床</span></div>
-    <p className="scroll-hint">横にスクロールして、ほかの日付も確認できます。</p>
-    {!points.length ? <div className="analysis-empty">この期間に該当する開始・起床の記録はありません。</div> : <div ref={scroll} className="chart-scroll" tabIndex={0} role="region" aria-label="睡眠開始・起床時刻グラフ。横にスクロールできます"><div className="time-chart" style={{ minWidth: Math.max(320, plotDays.length * 23 + 40) }}>
-      <div className="chart-y-axis" aria-hidden="true">{[0, 6, 12, 18, 24].map(hour => <span key={hour} style={{ top: `${hour / 24 * 100}%` }}>{hour}:00</span>)}</div>
-      <div className="time-chart-plot"><div className="daily-chart-grid" aria-hidden="true" />{points.map(point => <button type="button" key={`${point.entry.id}-${point.event}`} className={`time-point ${point.event}`}
-        style={{ left: `${((dayIndex.get(point.day) ?? 0) + 0.5) / plotDays.length * 100}%`, top: `${point.minute / 1440 * 100}%` }}
-        aria-label={`${point.day} ${point.event === "start" ? "睡眠開始" : "起床"} ${timeOf(point.event === "start" ? point.entry.start_at : point.entry.end_at)} ${KIND_LABEL[point.entry.kind]} 編集`}
-        title={`${compactDate(point.day)} ${point.event === "start" ? "開始" : "起床"} ${timeOf(point.event === "start" ? point.entry.start_at : point.entry.end_at)} ${KIND_LABEL[point.entry.kind]}`}
-        onClick={() => onEdit(point.entry)}><i /></button>)}<div className="time-chart-dates" aria-hidden="true">{plotDays.map((day, index) => <span key={day}>{index % tick === 0 ? plotDays.length <= 31 ? Number(day.slice(-2)) : `${showYear ? `${day.slice(2, 4)}/` : ""}${compactDate(day)}` : ""}</span>)}</div></div>
-    </div></div>}
-    <p className="analysis-caption">点を押すと記録を編集できます。開始・起床それぞれの実際の日付に表示し、未記録は補いません。</p>
-    <details className="analysis-details"><summary>開始・起床の日時を一覧で見る</summary><div className="table-scroll"><table><caption className="visually-hidden">睡眠開始・起床の日時一覧</caption><thead><tr><th scope="col">種類</th><th scope="col">睡眠開始</th><th scope="col">起床</th><th scope="col">操作</th></tr></thead><tbody>{rows.map(entry => <tr key={entry.id}><th scope="row">{KIND_LABEL[entry.kind]}</th><td>{compactDate(dayOf(entry.start_at))} {timeOf(entry.start_at)}</td><td>{compactDate(dayOf(entry.end_at))} {timeOf(entry.end_at)}</td><td><button type="button" onClick={() => onEdit(entry)} aria-label={`${KIND_LABEL[entry.kind]} ${entryLabel(entry)} 編集`}>編集</button></td></tr>)}</tbody></table>{!rows.length && <p>該当する記録はありません。</p>}</div></details>
-  </section>;
-}
-
 export function AnalysisPanel({ userId, entries, selected, loading, error, onSelect, onEdit }: {
   userId: string;
   entries: SleepEntry[]; selected: string; loading: boolean; error: string;
@@ -162,6 +114,7 @@ export function AnalysisPanel({ userId, entries, selected, loading, error, onSel
   const today = dayOf(new Date());
   const range = useMemo(() => periodRange(selected || today, period, entries), [selected, today, period, entries]);
   const data = useMemo(() => analyze(entries, range, today), [entries, range, today]);
+  const hasEvents = useMemo(() => timePoints(entries, range).length > 0, [entries, range]);
   const onDay = (day: string) => onSelect(day, true);
   const metricStyle = { "--metric-accent": "var(--doze)" } as CSSProperties;
   function move(offset: number) { onSelect(period === "week" ? shiftDay(selected, offset * 7) : shiftMonth(selected, offset * (period === "year" ? 12 : 1))); }
@@ -176,8 +129,9 @@ export function AnalysisPanel({ userId, entries, selected, loading, error, onSel
       <p className="analysis-method"><Icon name="info" size={15} />平均は記録がある日だけで計算し、未記録を0時間として扱いません。記録済みの日も入力途中の可能性があります。{range.first <= today && range.until > today && "今日の分も途中経過です。"}</p>
       {data.days.length ? <><DailyChart data={data} selected={selected} onSelect={onDay} />
       <SleepTimeline data={data} selected={selected} onSelect={onDay} onEdit={onEdit} />
-      <div className="analysis-two-column"><KindBreakdown data={data} /><DozeChart data={data} /></div>
-      <TimeTrends entries={entries} range={range} selected={selected} onEdit={onEdit} /></> : <div className="panel analysis-empty">表示する記録がありません。</div>}
+      <KindBreakdown data={data} /></> : <div className="panel analysis-empty">表示する睡眠時間の記録がありません。</div>}
+      {(data.days.length > 0 || hasEvents) && <><EventTimeDistributions userId={userId} entries={entries} range={range} />
+      <TimeTrends userId={userId} entries={entries} range={range} selected={selected} onEdit={onEdit} /></>}
     </>}
   </div>;
 }

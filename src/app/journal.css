@@ -88,17 +88,17 @@
 .notes-date-switch input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: white; transition: transform .15s; }
 .notes-date-switch input:checked { background: #8171c7; }
 .notes-date-switch input:checked::after { transform: translateX(14px); }
-.notes-list { display: grid; gap: 18px; }
+.notes-list { display: grid; gap: 10px; }
 .note-day { min-width: 0; }
-.note-entry-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 55px; margin: 0 3px 5px; }
-.note-entry-header.continued { justify-content: flex-end; min-height: 32px; margin-bottom: 5px; }
+.note-entry-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 55px; margin: 0 3px 3px; }
+.note-entry-header.continued { justify-content: flex-end; min-height: 30px; margin-bottom: 3px; }
 .note-day-heading { color: #625070; font-weight: 400; flex-shrink: 0; }
 .note-day-heading time { display: flex; align-items: center; gap: 9px; font-variant-numeric: tabular-nums; }
 .note-date-day { font-size: 44px; line-height: 1; letter-spacing: -1.5px; }
 .note-date-detail { display: flex; flex-direction: column; gap: 3px; align-items: flex-start; }
 .note-date-weekday { display: grid; place-items: center; width: 23px; height: 23px; border-radius: 50%; background: #fff; font-size: 12px; }
 .note-date-month { font-size: 10px; color: #92869e; }
-.note-entry + .note-entry { margin-top: 4px; }
+.note-entry + .note-entry { margin-top: 1px; }
 .note-card { width: 100%; min-width: 0; overflow: hidden; }
 .note-card:hover { border-color: #c9b9dd; }
 .note-content-toggle { display: block; width: 100%; min-height: 44px; padding: 12px 15px; border: 0; border-radius: inherit; background: transparent; text-align: left; color: inherit; }
@@ -142,7 +142,7 @@
   .note-date-day { font-size: 42px; }
   .note-sleep { gap: 7px; }
   .note-sleep-kind { font-size: 9px; }
-  .notes-list { gap: 16px; }
+  .notes-list { gap: 8px; }
   .analysis-controls { flex-wrap: nowrap; gap: 8px; }
   .analysis-period button { padding: 8px 7px; font-size: 11px; white-space: nowrap; }
   .analysis-controls > .today-button { flex-shrink: 0; font-size: 11px; padding: 7px 9px; }

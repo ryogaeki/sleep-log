@@ -1,6 +1,11 @@
-import { DAY, MINUTE, KINDS, dayOf, fromJst, minutesOnDay, monthStart, shiftDay, shiftMonth, timeOf, type Kind, type SleepEntry } from "./sleep";
+import { DAY, MINUTE, KINDS, KIND_LABEL, dayOf, fromJst, minutesOnDay, monthStart, shiftDay, shiftMonth, timeOf, type Kind, type SleepEntry } from "./sleep";
 
 export type Period = "week" | "month" | "year" | "all";
+export const KIND_FILTERS = ["all", "without-nap", ...KINDS] as const;
+export type KindFilter = typeof KIND_FILTERS[number];
+export const KIND_FILTER_LABEL: Record<KindFilter, string> = { all: "すべての種類", "without-nap": "昼寝以外", ...KIND_LABEL };
+export function isKindFilter(value: unknown): value is KindFilter { return KIND_FILTERS.includes(value as KindFilter); }
+export function matchesKind(kind: Kind, filter: KindFilter) { return filter === "all" || (filter === "without-nap" ? kind !== "nap" : kind === filter); }
 export interface PeriodRange { first: string; until: string; days: string[]; trimmed?: boolean }
 export interface TimelineSegment {
   entry: SleepEntry;
@@ -57,14 +62,25 @@ export function timelineSegments(entries: SleepEntry[], day: string): TimelineSe
     }));
 }
 
-export function timePoints(entries: SleepEntry[], range: PeriodRange, kind: Kind | "all" = "all"): TimePoint[] {
-  return entries.filter(entry => kind === "all" || entry.kind === kind).flatMap(entry => {
+export function timePoints(entries: SleepEntry[], range: PeriodRange, kind: KindFilter = "all"): TimePoint[] {
+  return entries.filter(entry => matchesKind(entry.kind, kind)).flatMap(entry => {
     return (["start", "end"] as const).map(event => {
       const value = event === "start" ? entry.start_at : entry.end_at;
       const [hours, minutes] = timeOf(value).split(":").map(Number);
       return { entry, event, day: dayOf(value), minute: hours * 60 + minutes };
     }).filter(point => point.day >= range.first && point.day < range.until);
   }).sort((a, b) => a.day.localeCompare(b.day) || a.minute - b.minute || a.event.localeCompare(b.event));
+}
+
+export function eventTimeDistribution(entries: SleepEntry[], range: PeriodRange, kind: KindFilter = "all") {
+  const create = () => ({ total: 0, byKind: Object.fromEntries(KINDS.map(k => [k, 0])) as Record<Kind, number>, bins: Array.from({ length: 6 }, (_, i) => ({ first: i * 4, until: (i + 1) * 4, count: 0, byKind: Object.fromEntries(KINDS.map(k => [k, 0])) as Record<Kind, number> })) });
+  const result = { start: create(), end: create() };
+  for (const point of timePoints(entries, range, kind)) {
+    const data = result[point.event];
+    const bin = data.bins[Math.floor(point.minute / 240)];
+    data.total++; data.byKind[point.entry.kind]++; bin.count++; bin.byKind[point.entry.kind]++;
+  }
+  return result;
 }
 
 export function analyze(entries: SleepEntry[], range: PeriodRange, today: string) {
