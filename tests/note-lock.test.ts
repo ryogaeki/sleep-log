@@ -32,3 +32,20 @@ test("ロックの指定と本文をバックアップ・復元で保持し、�
   const updated = await restored.save({ ...entry, note: "" }, 1);
   assert.equal(updated.note, null); assert.equal(updated.note_locked, false);
 });
+
+test("パスワード変更は古い設定との一致を確認し、日記本文とロック指定を保持する", async () => {
+  const original: SleepEntry = { id: "aaaaaaaa-aaaa-4aaa-8aaa-000000000001", user_id: DEMO_USER, start_at: "2026-10-17T02:00:00Z", end_at: "2026-10-17T03:00:00Z", kind: "normal", record_timezone: "Asia/Tokyo", note: "変更しない本文", note_locked: true, created_at: "2026-10-17T03:00:00Z", updated_at: "2026-10-17T03:00:00Z", revision: 1 };
+  const before = await createLockSettings("previous-password"), next = await createLockSettings("replacement-password");
+  let persisted: unknown;
+  const repo = new DemoRepository([original], () => {}, before, settings => { persisted = settings; });
+  await repo.changeLockSettings(before, next);
+  assert.deepEqual(persisted, next);
+  assert.equal(await verifyLockPassword("previous-password", (await repo.lockSettings())!), false);
+  assert.equal(await verifyLockPassword("replacement-password", (await repo.lockSettings())!), true);
+  await assert.rejects(repo.changeLockSettings(before, before), { code: "conflict" });
+  assert.deepEqual(await repo.get(original.id), original);
+  assert.deepEqual(await repo.lockSettings(), next);
+  const failed = new DemoRepository([original], () => {}, before, () => { throw new Error("保存失敗"); });
+  await assert.rejects(failed.changeLockSettings(before, next));
+  assert.deepEqual(await failed.lockSettings(), before);
+});

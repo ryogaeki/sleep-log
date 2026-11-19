@@ -4,7 +4,9 @@ import { parseBackup, planRestore, type Backup } from "../lib/backup";
 import { dayOf, timeOf, dateLabel, KIND_LABEL } from "../lib/sleep";
 import type { Repository } from "../lib/repository";
 import { Icon } from "./Icon";
+import { useNoteLock } from "./NoteLockProvider";
 export function DataPanel({repository,demo,onRestored,onLogout}:{repository:Repository;demo:boolean;onRestored:(message:string)=>void;onLogout:()=>void}) {
+  const privacy=useNoteLock();
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState("");
   const [error,setError]=useState("");
@@ -47,6 +49,7 @@ export function DataPanel({repository,demo,onRestored,onLogout}:{repository:Repo
       {preview.plan.changed.length>0&&<div className="notice"><Icon name="info"/><div><p>{preview.plan.changed.length}件は現在の記録と内容が異なります。現在の内容を残します。</p><ul className="restore-list">{preview.plan.changed.slice(0,5).map(e=><li key={e.id}>{KIND_LABEL[e.kind]} · {dateLabel(dayOf(e.start_at))} {timeOf(e.start_at)}</li>)}</ul>{preview.plan.changed.length>5&&<p>ほか{preview.plan.changed.length-5}件</p>}</div></div>}
       {preview.plan.collisions.length>0?<div className="notice error" role="alert"><Icon name="info"/><div><p>現在の記録と時間帯が重なるため、復元できません。</p><ul className="restore-list">{preview.plan.collisions.slice(0,5).map((c,i)=><li key={i}>{KIND_LABEL[c.incoming.kind]} {dateLabel(dayOf(c.incoming.start_at))} {timeOf(c.incoming.start_at)}〜{timeOf(c.incoming.end_at)} が、{KIND_LABEL[c.current.kind]} {dateLabel(dayOf(c.current.start_at))} {timeOf(c.current.start_at)}〜{timeOf(c.current.end_at)} と重複</li>)}</ul></div></div>:<p className="muted">現在の記録を削除せず、追加分をまとめて復元します。</p>}
       <div className="row wrap gap-3"><button type="button" className="button primary" onClick={restore} disabled={busy || !preview.plan.additions.length || preview.plan.collisions.length>0}>{busy?"復元中…":`${preview.plan.additions.length}件を復元する`}</button><button type="button" className="button secondary" disabled={busy} onClick={()=>setPreview(null)}>キャンセル</button></div></section>}
+    <section className="panel diary-password-settings" aria-labelledby="diary-password-settings-title"><div><h2 id="diary-password-settings-title">日記のロック</h2><p>日記に共通のパスワードを変更できます。</p></div><button type="button" className="button secondary" disabled={busy || privacy.working} onClick={event=>{event.currentTarget.focus();privacy.changePassword();}}><Icon name="lock" size={18}/>パスワードを変更</button>{privacy.passwordMessage&&<p className="diary-password-message" role="status">{privacy.passwordMessage}</p>}</section>
     <section className="panel storage-card"><div><Icon name={demo?"info":"cloud"}/><div><h2>{demo?"体験モード":"クラウド保存"}</h2><p>{demo?"変更はこのタブだけに一時保存されます。本番の記録にはなりません。":"記録はログインした本人だけがアクセスできます。日時は日本時間です。"}</p></div></div><button className="text-button logout-button" type="button" disabled={busy} onClick={onLogout}><Icon name="logout" size={17}/>{demo?"体験を終了する":"ログアウト"}</button></section>
   </div>;
 }

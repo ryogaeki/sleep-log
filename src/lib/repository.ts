@@ -14,6 +14,7 @@ export interface Repository {
   restore(backup: Backup): Promise<RestoreResult>;
   lockSettings(): Promise<NoteLockSettings | null>;
   createLockSettings(settings: NoteLockSettings): Promise<void>;
+  changeLockSettings(previous: NoteLockSettings, next: NoteLockSettings): Promise<void>;
 }
 export function dbError(error: { code?: string; message?: string }): AppError {
   if (error.code === "23P01") return new AppError("overlap", "時間帯が重なる記録があります。最新の記録を確認して、日時を修正してください。");
@@ -33,6 +34,17 @@ export class CloudRepository implements Repository {
     const { error } = await this.sb.from("note_lock_settings").insert({ ...validateLockSettings(settings), user_id: this.userId });
     if (error?.code === "23505") throw new AppError("conflict", "別の画面でパスワードが設定されました。閉じてからもう一度お試しください。");
     if (error) throw dbError(error);
+  }
+  async changeLockSettings(previous: NoteLockSettings, next: NoteLockSettings) {
+    const expected = validateLockSettings(previous), checked = validateLockSettings(next);
+    const { data, error } = await this.sb.from("note_lock_settings").update({ salt: checked.salt, verifier: checked.verifier })
+      .eq("user_id", this.userId).eq("version", expected.version).eq("salt", expected.salt).eq("verifier", expected.verifier)
+      .select("version,salt,verifier").maybeSingle();
+    if (error?.code === "42501") throw new AppError("permission", "パスワードを変更できませんでした。ログイン状態と、パスワード変更用の更新SQLの適用を確認してください。");
+    if (error) throw dbError(error);
+    if (!data) throw new AppError("conflict", "別の画面でパスワードが変更されています。閉じてからもう一度お試しください。");
+    const saved = validateLockSettings(data);
+    if (saved.salt !== checked.salt || saved.verifier !== checked.verifier) throw new AppError("network", "パスワードの変更結果を確認できませんでした。閉じてから新しいパスワードで確認してください。");
   }
   async all() {
     // 同じRLSを適用する既存のスナップショットRPCで、1000件超も欠けずに読む。
@@ -107,6 +119,11 @@ export class DemoRepository implements Repository {
   async createLockSettings(settings: NoteLockSettings) {
     if (this.settings) throw new AppError("conflict", "パスワードは設定済みです。");
     const checked = validateLockSettings(settings); this.persistSettings(checked); this.settings = checked;
+  }
+  async changeLockSettings(previous: NoteLockSettings, next: NoteLockSettings) {
+    const expected = validateLockSettings(previous), checked = validateLockSettings(next);
+    if (!this.settings || this.settings.salt !== expected.salt || this.settings.verifier !== expected.verifier) throw new AppError("conflict", "別の画面でパスワードが変更されています。閉じてからもう一度お試しください。");
+    this.persistSettings(checked); this.settings = checked;
   }
   private commit(next: SleepEntry[]) { this.persist(next); this.entries = next; }
   async all() { return structuredClone(this.entries); }

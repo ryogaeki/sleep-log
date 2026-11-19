@@ -30,6 +30,8 @@ before(async()=>{
   await db.exec(migration); // 誤って同じ更新SQLを再実行してもデータを失わない。
   const diaryMigration=await readFile(new URL("../supabase/migrations/202611180001_diary_display_lock.sql",import.meta.url),"utf8");
   await db.exec(diaryMigration); await db.exec(diaryMigration);
+  const passwordMigration=await readFile(new URL("../supabase/migrations/202611190001_change_diary_password.sql",import.meta.url),"utf8");
+  await db.exec(passwordMigration); await db.exec(passwordMigration);
   afterMigration = (await db.query<Record<string,unknown>>("select * from public.sleep_entries")).rows[0];
 });
 after(async()=>{await db.close();});
@@ -126,7 +128,7 @@ test("日記のパスワード照合値は本人だけが登録・取得でき�
   const salt="a".repeat(32),verifier="b".repeat(64);
   await db.query("insert into public.note_lock_settings(user_id,salt,verifier) values($1,$2,$3)",[owner,salt,verifier]);
   assert.equal((await db.query("select * from public.note_lock_settings")).rows.length,1);
-  await assert.rejects(db.query("update public.note_lock_settings set verifier=$1",["c".repeat(64)]),{code:"42501"});
+  await assert.rejects(db.query("update public.note_lock_settings set version=1"),{code:"42501"});
   await asUser(other);assert.equal((await db.query("select * from public.note_lock_settings")).rows.length,0);
   await assert.rejects(db.query("insert into public.note_lock_settings(user_id,salt,verifier) values($1,$2,$3)",[owner,salt,verifier]),{code:"42501"});
   await asUser(stranger);await assert.rejects(db.query("insert into public.note_lock_settings(user_id,salt,verifier) values($1,$2,$3)",[stranger,salt,verifier]),{code:"42501"});
@@ -145,4 +147,23 @@ test("日記のロックは本文を変更せず、書き出し・復元でも�
   await db.query("delete from public.sleep_entries where id=$1",[id(1)]);delete backup.entries[0].note_locked;
   await db.query("select public.restore_sleep_backup($1::jsonb)",[JSON.stringify(backup)]);
   assert.equal((await db.query<{note_locked:boolean}>("select note_locked from public.sleep_entries")).rows[0].note_locked,false);
+});
+
+test("日記パスワードは本人の最新の照合値だけを変更でき、他人・未許可・古い値の更新を拒む",async()=>{
+  await reset();await insert(1);
+  await db.query("update public.sleep_entries set note='本文を保持',note_locked=true where id=$1",[id(1)]);
+  const before=(await db.query("select * from public.sleep_entries")).rows[0];
+  const salt="a".repeat(32),verifier="b".repeat(64),nextSalt="c".repeat(32),nextVerifier="d".repeat(64);
+  await db.query("insert into public.note_lock_settings(user_id,salt,verifier) values($1,$2,$3)",[owner,salt,verifier]);
+  const update="update public.note_lock_settings set salt=$1,verifier=$2 where user_id=$3 and salt=$4 and verifier=$5 returning user_id";
+  await asUser(other);assert.equal((await db.query(update,[nextSalt,nextVerifier,owner,salt,verifier])).rows.length,0);
+  await asUser(stranger);assert.equal((await db.query(update,[nextSalt,nextVerifier,owner,salt,verifier])).rows.length,0);
+  await db.exec("reset role; set role anon;");await assert.rejects(db.query(update,[nextSalt,nextVerifier,owner,salt,verifier]),{code:"42501"});
+  await asUser(owner);assert.equal((await db.query(update,[nextSalt,nextVerifier,owner,salt,verifier])).rows.length,1);
+  assert.equal((await db.query(update,[salt,verifier,owner,salt,verifier])).rows.length,0);
+  await assert.rejects(db.query("update public.note_lock_settings set user_id=$1",[other]),{code:"42501"});
+  await assert.rejects(db.query("update public.note_lock_settings set salt='invalid'"),{code:"23514"});
+  const saved=(await db.query<{salt:string;verifier:string}>("select salt,verifier from public.note_lock_settings")).rows[0];
+  assert.equal(saved.salt,nextSalt);assert.equal(saved.verifier,nextVerifier);
+  assert.deepEqual((await db.query("select * from public.sleep_entries")).rows[0],before);
 });
